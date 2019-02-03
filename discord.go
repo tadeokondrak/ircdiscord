@@ -14,7 +14,7 @@ func reloadChannels(session *discordgo.Session, guildID string) {
 		return
 	}
 	for _, user := range userSlice {
-		user.channels = map[string]*discordgo.Channel{} // clear user.channels
+		newChannels := map[string]*discordgo.Channel{} // clear user.channels
 		channels, _ := user.session.GuildChannels(user.guildID)
 		for _, channel := range channels {
 			if channel.Type == discordgo.ChannelTypeGuildCategory || channel.Type == discordgo.ChannelTypeGuildVoice {
@@ -29,12 +29,13 @@ func reloadChannels(session *discordgo.Session, guildID string) {
 				} else {
 					suffix = strconv.Itoa(i)
 				}
-				_, ok := user.channels[name+suffix]
+				_, ok := newChannels[name+suffix]
 				if !ok {
-					user.channels[name+suffix] = channel
+					newChannels[name+suffix] = channel
 					done = true
 				}
 			}
+			user.channels = newChannels
 		}
 	}
 }

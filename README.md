@@ -13,7 +13,7 @@ Run the program, and in your IRC client, connect to `127.0.0.1` with the server 
 # What works
 
 - Connecting
-- Joining channels
+- Joining channels and recieving the last 25 messages sent
 - Receiving messages
 - Sending messages
 - /list for a list of channels

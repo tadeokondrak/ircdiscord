@@ -39,6 +39,6 @@ func isValidDiscordNick(nick string) bool {
 }
 
 func convertIRCMessageToDiscord(ircMessage string) (discordMessage string) {
-	discordMessage = strings.Trim(ircMessage, " \n")
+	discordMessage = strings.TrimSpace(ircMessage)
 	return ircMessage
 }

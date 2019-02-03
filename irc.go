@@ -45,7 +45,7 @@ func (user *ircUser) Encode(message *irc.Message) (err error) {
 }
 
 func convertDiscordUsernameToIRC(discordName string) (IRCNick string) {
-	re := regexp.MustCompile("[^a-zA-Z0-9\\\\\\[\\]\\{\\}\\^_\\-|]+")
+	re := regexp.MustCompile("[^a-zA-Z0-9\\[\\]\\{\\}\\^_\\-|`\\\\]+")
 	cleaned := re.ReplaceAllString(discordName, "")
 	if len(cleaned) >= 9 {
 		IRCNick = cleaned[0:9]

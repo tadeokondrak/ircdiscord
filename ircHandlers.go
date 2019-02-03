@@ -208,6 +208,20 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 				Params:  []string{user.nick, channelName, topic},
 			})
 		}
+		go func(user *ircUser, channel *discordgo.Channel) {
+			messages, err := user.session.ChannelMessages(channel.ID, 25, "", "", "")
+			if err != nil {
+				user.Encode(&irc.Message{
+					Prefix:  user.serverPrefix,
+					Command: irc.NOTICE,
+					Params:  []string{user.nick, "There was an error getting messages from Discord."},
+				})
+				return
+			}
+			for _, message := range messages {
+				sendMessageFromDiscordToIRC(user, message)
+			}
+		}(user, discordChannel)
 	}
 }
 

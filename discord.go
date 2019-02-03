@@ -30,6 +30,67 @@ func isRecentlySentMessage(user *ircUser, message *discordgo.Message) bool {
 	return false
 }
 
+func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message) {
+	var ircChannel string
+	var discordChannel *discordgo.Channel
+
+	for _ircChannel, _discordChannel := range user.channels {
+		if _discordChannel.ID == message.ChannelID {
+			ircChannel = _ircChannel
+			discordChannel = _discordChannel
+			break
+		}
+	}
+
+	if !user.joinedChannels[ircChannel] {
+		return
+	}
+
+	if discordChannel == nil {
+		return
+	}
+
+	if isRecentlySentMessage(user, message) {
+		return
+	}
+
+	nick := getDiscordNick(user, message.Author)
+	prefix := &irc.Prefix{
+		Name: convertDiscordUsernameToIRCNick(nick),
+		User: convertDiscordUsernameToIRCUser(message.Author.Username),
+		Host: message.Author.ID,
+	}
+
+	// TODO: convert discord nicks to the irc nicks shown
+	discordContent, err := message.ContentWithMoreMentionsReplaced(user.session)
+	_ = err
+
+	content := convertDiscordContentToIRC(discordContent, user.session)
+	if content != "" {
+		for _, line := range strings.Split(content, "\n") {
+			user.Encode(&irc.Message{
+				Prefix:  prefix,
+				Command: irc.PRIVMSG,
+				Params: []string{
+					ircChannel,
+					line,
+				},
+			})
+		}
+	}
+
+	for _, attachment := range message.Attachments {
+		user.Encode(&irc.Message{
+			Prefix:  prefix,
+			Command: irc.PRIVMSG,
+			Params: []string{
+				ircChannel,
+				convertDiscordContentToIRC(attachment.URL, user.session),
+			},
+		})
+	}
+}
+
 func getNameForChannel(user *ircUser, discordChannel *discordgo.Channel) (name string, exists bool) {
 	channelName := convertDiscordChannelNameToIRC(discordChannel.Name)
 	var suffix string

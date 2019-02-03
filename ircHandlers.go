@@ -195,11 +195,6 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 		return
 	}
 
-	guildChannelMap := make(map[string]*discordgo.Channel)
-	for _, channel := range guildChannels {
-		guildChannelMap["#"+channel.Name] = channel
-	}
-
 	for _, channelName := range channelsToJoin {
 		_, ok := user.channels[channelName]
 		if !ok {

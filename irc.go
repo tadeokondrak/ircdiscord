@@ -55,26 +55,50 @@ func (user *ircUser) Encode(message *irc.Message) (err error) {
 	return
 }
 
+func truncate(str string, chars int) string {
+	if len(str) >= chars {
+		return str[0:chars]
+	}
+	return str
+}
+
 func convertDiscordChannelNameToIRC(discordName string) (IRCName string) {
 	re := regexp.MustCompile("[^a-zA-Z0-9#\\-]+")
 	cleaned := re.ReplaceAllString(discordName, "")
-	if len(cleaned) >= 50 {
-		IRCName = "#" + cleaned[0:50]
-	} else {
-		IRCName = "#" + cleaned
-	}
-	return
+	return truncate("#"+cleaned, 50)
 }
 
-func convertDiscordUsernameToIRC(discordName string) (IRCNick string) {
+func convertDiscordUsernameToIRCUser(discordName string) (IRCUser string) {
 	re := regexp.MustCompile("[^a-zA-Z0-9\\[\\]\\{\\}\\^_\\-|`\\\\]+")
 	cleaned := re.ReplaceAllString(discordName, "")
 
-	if len(cleaned) >= 9 {
-		IRCNick = cleaned[0:9]
-	} else {
-		IRCNick = cleaned
+	IRCUser = truncate(cleaned, 20) // arbitrary limit, i couldn't find a real one
+
+	if IRCUser == "" {
+		IRCUser = "_"
 	}
+
+	return
+}
+
+func convertDiscordUsernameToIRCRealname(discordName string) (IRCName string) {
+	re := regexp.MustCompile("[^a-zA-Z0-9\\[\\]\\{\\}\\^_\\-|`\\\\ ]+")
+	cleaned := re.ReplaceAllString(discordName, "")
+
+	IRCName = truncate(cleaned, 20) // arbitrary limit, i couldn't find a real one
+
+	if IRCName == "" {
+		IRCName = "_"
+	}
+
+	return
+}
+
+func convertDiscordUsernameToIRCNick(discordName string) (IRCNick string) {
+	re := regexp.MustCompile("[^a-zA-Z0-9\\[\\]\\{\\}\\^_\\-|`\\\\]+")
+	cleaned := re.ReplaceAllString(discordName, "")
+
+	IRCNick = truncate(cleaned, 9)
 
 	if IRCNick == "" {
 		IRCNick = "_"

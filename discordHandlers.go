@@ -68,8 +68,8 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 
 		nick := getDiscordNick(user, message.Author)
 		prefix := &irc.Prefix{
-			Name: convertDiscordUsernameToIRC(nick),
-			User: convertDiscordUsernameToIRC(message.Author.Username),
+			Name: convertDiscordUsernameToIRCNick(nick),
+			User: convertDiscordUsernameToIRCUser(message.Author.Username),
 			Host: message.Author.ID,
 		}
 

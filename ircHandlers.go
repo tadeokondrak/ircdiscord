@@ -151,8 +151,8 @@ func ircPASS(message *irc.Message, user *ircUser) {
 		return
 	}
 
-	user.nick = convertDiscordUsernameToIRC(getDiscordNick(user, user.discordUser))
-	user.realName = convertDiscordUsernameToIRC(user.discordUser.Username)
+	user.nick = convertDiscordUsernameToIRCNick(getDiscordNick(user, user.discordUser))
+	user.realName = convertDiscordUsernameToIRCRealname(user.discordUser.Username)
 	user.clientPrefix.Name = user.nick
 	user.clientPrefix.User = user.realName
 	user.clientPrefix.Host = user.discordUser.ID

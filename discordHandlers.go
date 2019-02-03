@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/bwmarrin/discordgo"
 	"gopkg.in/sorcix/irc.v2"
 )
@@ -13,6 +15,7 @@ func addRecentlySentMessage(user *ircUser, channelID string, content string) {
 }
 
 func isRecentlySentMessage(user *ircUser, channelID string, content string) bool {
+	// TODO: verify that the message was sent by us
 	if recentlySentMessages, ok := user.recentlySentMessages[channelID]; ok {
 		for index, recentMessage := range recentlySentMessages {
 			if content == recentMessage && recentMessage != "" {
@@ -24,15 +27,40 @@ func isRecentlySentMessage(user *ircUser, channelID string, content string) bool
 	return false
 }
 
+func channelCreate(session *discordgo.Session, channel *discordgo.ChannelUpdate) {
+	reloadChannels(session, channel.GuildID)
+}
+
+func channelDelete(session *discordgo.Session, channel *discordgo.ChannelUpdate) {
+	reloadChannels(session, channel.GuildID)
+}
+
+func channelUpdate(session *discordgo.Session, channel *discordgo.ChannelUpdate) {
+	reloadChannels(session, channel.GuildID)
+}
+
 func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
 	userSlice, ok := ircSessions[session.Token][message.GuildID]
 	if !ok {
 		return
 	}
 	for _, user := range userSlice {
-		channel, ok := user.channels[message.ChannelID]
+		var ircChannel string
+		var discordChannel *discordgo.Channel
 
-		if !ok {
+		for _ircChannel, _discordChannel := range user.channels {
+			if _discordChannel.ID == message.ChannelID {
+				ircChannel = _ircChannel
+				discordChannel = _discordChannel
+				break
+			}
+		}
+
+		if !user.joinedChannels[ircChannel] {
+			continue
+		}
+
+		if discordChannel == nil {
 			continue
 		}
 
@@ -51,16 +79,18 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 		discordContent, err := message.ContentWithMoreMentionsReplaced(session)
 		_ = err
 
-		content := convertDiscordContentToIRC(discordContent, session) // SPLIT BY LINES AFTER
+		content := convertDiscordContentToIRC(discordContent, session)
 		if content != "" {
-			user.Encode(&irc.Message{
-				Prefix:  prefix,
-				Command: irc.PRIVMSG,
-				Params: []string{
-					channel,
-					content,
-				},
-			})
+			for _, line := range strings.Split(content, "\n") {
+				user.Encode(&irc.Message{
+					Prefix:  prefix,
+					Command: irc.PRIVMSG,
+					Params: []string{
+						ircChannel,
+						line,
+					},
+				})
+			}
 		}
 
 		for _, attachment := range message.Attachments {
@@ -68,7 +98,7 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 				Prefix:  prefix,
 				Command: irc.PRIVMSG,
 				Params: []string{
-					channel,
+					ircChannel,
 					convertDiscordContentToIRC(attachment.URL, session),
 				},
 			})

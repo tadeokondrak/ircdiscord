@@ -14,7 +14,9 @@ type ircUser struct {
 	nick                 string
 	realName             string
 	hostname             string
-	channels             map[string]string
+	channels             map[string]*discordgo.Channel // channels["#channelname"] = channel
+	joinedChannels       map[string]bool
+	users                map[string]*discordgo.User
 	token                string
 	guildID              string
 	loggedin             bool
@@ -47,6 +49,17 @@ func (user *ircUser) Encode(message *irc.Message) (err error) {
 	return
 }
 
+func convertDiscordChannelNameToIRC(discordName string) (IRCName string) {
+	re := regexp.MustCompile("[^a-zA-Z0-9#\\-]+")
+	cleaned := re.ReplaceAllString(discordName, "")
+	if len(cleaned) >= 50 {
+		IRCName = "#" + cleaned[0:50]
+	} else {
+		IRCName = "#" + cleaned
+	}
+	return
+}
+
 func convertDiscordUsernameToIRC(discordName string) (IRCNick string) {
 	re := regexp.MustCompile("[^a-zA-Z0-9\\[\\]\\{\\}\\^_\\-|`\\\\]+")
 	cleaned := re.ReplaceAllString(discordName, "")
@@ -58,6 +71,15 @@ func convertDiscordUsernameToIRC(discordName string) (IRCNick string) {
 	return
 }
 
+func convertDiscordTopicToIRC(discordContent string, session *discordgo.Session) (ircContent string) {
+	content := convertDiscordContentToIRC(discordContent, session)
+	newlines := regexp.MustCompile("[\n]+")
+	ircContent = newlines.ReplaceAllString(content, "")
+	return
+}
+
 func convertDiscordContentToIRC(discordContent string, session *discordgo.Session) (ircContent string) {
-	return discordContent
+	newlines := regexp.MustCompile("[\n]+")
+	ircContent = newlines.ReplaceAllString(discordContent, "")
+	return
 }

@@ -27,9 +27,10 @@ func handleConnection(conn net.Conn) {
 			User: "*",
 			Host: clientHostname,
 		},
-		conn:     irc.NewConn(conn),
-		netConn:  conn,
-		channels: make(map[string]string),
+		conn:           irc.NewConn(conn),
+		netConn:        conn,
+		channels:       map[string]*discordgo.Channel{},
+		joinedChannels: map[string]bool{},
 	}
 
 	fmt.Printf("%s connected\n", clientHostname)
@@ -60,6 +61,8 @@ func handleConnection(conn net.Conn) {
 				go ircPRIVMSG(message, user)
 			case irc.WHOIS:
 				go ircWHOIS(message, user)
+			case irc.LIST:
+				go ircLIST(message, user)
 			}
 		} else {
 			if message.Command == irc.PASS {

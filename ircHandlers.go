@@ -12,6 +12,30 @@ func ircWHOIS(message *irc.Message, user *ircUser) {
 
 }
 
+func ircLIST(message *irc.Message, user *ircUser) {
+	if len(message.Params) > 0 {
+		// TODO
+		return
+	}
+	user.Encode(&irc.Message{
+		Prefix:  user.serverPrefix,
+		Command: irc.RPL_LISTSTART,
+		Params:  []string{user.nick, "Channel", "Users  Name"},
+	})
+	for ircChannel, discordChannel := range user.channels {
+		user.Encode(&irc.Message{
+			Prefix:  user.serverPrefix,
+			Command: irc.RPL_LIST,
+			Params:  []string{user.nick, ircChannel, discordChannel.ID, convertDiscordTopicToIRC(discordChannel.Topic, user.session)},
+		})
+	}
+	user.Encode(&irc.Message{
+		Prefix:  user.serverPrefix,
+		Command: irc.RPL_LISTEND,
+		Params:  []string{user.nick, "End of /LIST"},
+	})
+}
+
 func ircPRIVMSG(message *irc.Message, user *ircUser) {
 	if len(message.Params) < 1 {
 		user.Encode(&irc.Message{
@@ -19,6 +43,7 @@ func ircPRIVMSG(message *irc.Message, user *ircUser) {
 			Command: irc.ERR_NORECIPIENT,
 			Params:  []string{"No recipient given (PRIVMSG)"},
 		})
+		return
 	}
 	if len(message.Params) < 2 || message.Params[1] == "" {
 		user.Encode(&irc.Message{
@@ -26,27 +51,26 @@ func ircPRIVMSG(message *irc.Message, user *ircUser) {
 			Command: irc.ERR_NOTEXTTOSEND,
 			Params:  []string{"No text to send"},
 		})
+		return
 	}
-	var channelID string
-	for id, name := range user.channels {
-		if name == message.Params[0] {
-			channelID = id
-			break
-		}
-	}
-	if channelID == "" {
+
+	reloadChannels(user.session, user.guildID)
+
+	channel := user.channels[message.Params[0]]
+	if channel == nil {
 		user.Encode(&irc.Message{
 			Prefix:  user.serverPrefix,
 			Command: irc.ERR_NOSUCHCHANNEL,
 			Params:  []string{message.Params[0], "No such channel"},
 		})
+		return
 	}
 
 	content := convertIRCMessageToDiscord(message.Params[1])
 
-	addRecentlySentMessage(user, channelID, content)
+	addRecentlySentMessage(user, channel.ID, content)
 
-	_, err := user.session.ChannelMessageSend(channelID, content)
+	_, err := user.session.ChannelMessageSend(channel.ID, content)
 	if err != nil {
 		// TODO: map common discord errors to irc errors
 		user.Encode(&irc.Message{
@@ -106,18 +130,17 @@ func ircPASS(message *irc.Message, user *ircUser) {
 			user.Close()
 			return
 		}
-		user.Encode(&irc.Message{
-			Prefix:  user.serverPrefix,
-			Command: irc.NOTICE,
-			Params:  []string{user.nick, "Successfully connected to Discord!"},
-		})
 		user.session.AddHandler(messageCreate)
+		user.session.AddHandler(channelUpdate)
+		user.session.AddHandler(channelDelete)
+		user.session.AddHandler(channelCreate)
 	}
 	user.session = discordSessions[user.token]
 	if ircSessions[user.session.Token] == nil {
 		ircSessions[user.session.Token] = map[string][]*ircUser{}
 	}
 	ircSessions[user.session.Token][user.guildID] = append(ircSessions[user.session.Token][user.guildID], user)
+
 	discordUser, err := user.session.User("@me")
 	if err != nil {
 		user.Encode(&irc.Message{
@@ -125,14 +148,18 @@ func ircPASS(message *irc.Message, user *ircUser) {
 			Command: irc.NOTICE,
 			Params:  []string{user.nick, "There was an error getting user data from Discord."},
 		})
+		user.Close()
 		return
 	}
+
 	user.nick = convertDiscordUsernameToIRC(getDiscordNick(user, discordUser))
 	user.realName = convertDiscordUsernameToIRC(discordUser.Username)
 	user.clientPrefix.Name = user.nick
 	user.clientPrefix.User = user.realName
 	user.clientPrefix.Host = discordUser.ID
 	user.loggedin = true
+
+	reloadChannels(user.session, user.guildID)
 	user.Encode(&irc.Message{
 		Prefix:  user.serverPrefix,
 		Command: irc.RPL_WELCOME,
@@ -178,20 +205,21 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 	}
 
 	for _, channelName := range channelsToJoin {
-		if channel, ok := guildChannelMap[channelName]; ok {
-			user.channels[channel.ID] = channelName
-			user.Encode(&irc.Message{
-				Prefix:  user.clientPrefix,
-				Command: irc.JOIN,
-				Params:  []string{"#" + channel.Name},
-			})
-		} else {
+		_, ok := user.channels[channelName]
+		if !ok {
 			user.Encode(&irc.Message{
 				Prefix:  user.serverPrefix,
 				Command: irc.ERR_NOSUCHCHANNEL,
 				Params:  []string{channelName, "No such channel"},
 			})
+			continue
 		}
+		user.joinedChannels[channelName] = true
+		user.Encode(&irc.Message{
+			Prefix:  user.clientPrefix,
+			Command: irc.JOIN,
+			Params:  []string{channelName},
+		})
 	}
 }
 

@@ -1,16 +1,48 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"gopkg.in/sorcix/irc.v2"
 )
 
+func reloadChannels(session *discordgo.Session, guildID string) {
+	userSlice, ok := ircSessions[session.Token][guildID]
+	if !ok {
+		return
+	}
+	for _, user := range userSlice {
+		user.channels = map[string]*discordgo.Channel{} // clear user.channels
+		channels, _ := user.session.GuildChannels(user.guildID)
+		for _, channel := range channels {
+			if channel.Type == discordgo.ChannelTypeGuildCategory || channel.Type == discordgo.ChannelTypeGuildVoice {
+				continue
+			}
+			name := convertDiscordChannelNameToIRC(channel.Name)
+			done := false
+			var suffix string
+			for i := 0; !done; i++ {
+				if i == 0 {
+					suffix = ""
+				} else {
+					suffix = strconv.Itoa(i)
+				}
+				_, ok := user.channels[name+suffix]
+				if !ok {
+					user.channels[name+suffix] = channel
+					done = true
+				}
+			}
+		}
+	}
+}
+
 func getDiscordNick(user *ircUser, discordUser *discordgo.User) (nick string) {
 	nick = discordUser.Username
 
-	if discordUser.Discriminator == "0000" {
+	if discordUser.Discriminator == "0000" { // webhooks don't have nicknames
 		return
 	}
 

@@ -35,6 +35,9 @@ func (user *ircUser) Close() (err error) {
 func (user *ircUser) Decode() (message *irc.Message, err error) {
 	netData, err := bufio.NewReader(user.netConn).ReadString('\n')
 	message = irc.ParseMessage(netData)
+	if message != nil {
+		fmt.Println(message)
+	}
 	return
 }
 

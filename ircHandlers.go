@@ -183,19 +183,8 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 		})
 		return
 	}
-	channelsToJoin := strings.Split(message.Params[0], ",")
 
-	guildChannels, err := user.session.GuildChannels(user.guildID)
-	if err != nil {
-		user.Encode(&irc.Message{
-			Prefix:  user.serverPrefix,
-			Command: irc.NOTICE,
-			Params:  []string{user.nick, "There was an error getting channels from Discord."},
-		})
-		return
-	}
-
-	for _, channelName := range channelsToJoin {
+	for _, channelName := range strings.Split(message.Params[0], ",") {
 		_, ok := user.channels[channelName]
 		if !ok {
 			user.Encode(&irc.Message{

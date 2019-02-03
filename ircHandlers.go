@@ -185,7 +185,7 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 	}
 
 	for _, channelName := range strings.Split(message.Params[0], ",") {
-		_, ok := user.channels[channelName]
+		discordChannel, ok := user.channels[channelName]
 		if !ok {
 			user.Encode(&irc.Message{
 				Prefix:  user.serverPrefix,
@@ -199,6 +199,11 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 			Prefix:  user.clientPrefix,
 			Command: irc.JOIN,
 			Params:  []string{channelName},
+		})
+		user.Encode(&irc.Message{
+			Prefix:  user.clientPrefix,
+			Command: irc.RPL_TOPIC,
+			Params:  []string{user.nick, channelName, convertDiscordTopicToIRC(discordChannel.Topic, user.session)},
 		})
 	}
 }

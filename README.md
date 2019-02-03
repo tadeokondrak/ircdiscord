@@ -10,6 +10,14 @@ Work in progress, many features aren't yet supported.
 
 Run the program, and in your IRC client, connect to `127.0.0.1` with the server password being `<your discord token>:<target discord server id>`
 
+# What works
+
+- Connecting
+- Joining channels
+- Receiving messages
+- Sending messages
+- /list for a list of channels
+
 # Licence
 
 ISC

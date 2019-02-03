@@ -8,34 +8,75 @@ import (
 	"gopkg.in/sorcix/irc.v2"
 )
 
-func reloadChannels(session *discordgo.Session, guildID string) {
-	userSlice, ok := ircSessions[session.Token][guildID]
-	if !ok {
+func getNameForChannel(user *ircUser, discordChannel *discordgo.Channel) (name string, exists bool) {
+	channelName := convertDiscordChannelNameToIRC(discordChannel.Name)
+	var suffix string
+	for i := 0; ; i++ {
+		if i == 0 {
+			suffix = ""
+		} else {
+			suffix = strconv.Itoa(i)
+		}
+		name := channelName + suffix
+		_discordChannel, exists := user.channels[name]
+		if !exists {
+			return name, false
+		}
+		if _discordChannel.ID == discordChannel.ID {
+			return name, true
+		}
+	}
+}
+
+// returns empty string if it can't find
+func getChannelByID(user *ircUser, channelID string) (name string, channel *discordgo.Channel) {
+	for ircChannel, discordChannel := range user.channels {
+		if discordChannel.ID == channelID {
+			return ircChannel, discordChannel
+		}
+	}
+	return "", nil
+}
+
+func addChannel(user *ircUser, discordChannel *discordgo.Channel) {
+	ircChannel, exists := getNameForChannel(user, discordChannel)
+	if exists {
+		return
+	}
+	user.channels[ircChannel] = discordChannel
+}
+
+func removeChannel(user *ircUser, discordChannel *discordgo.Channel) {
+	// TODO: kick the user if they're in it
+	ircChannel, _ := getChannelByID(user, discordChannel.ID)
+	if ircChannel == "" {
+		return
+	}
+	delete(user.channels, ircChannel)
+}
+
+func updateChannel(user *ircUser, discordChannel *discordgo.Channel) {
+	// TODO: handle the channel name changing better, dunno how though
+	ircChannel, _ := getChannelByID(user, discordChannel.ID)
+	if ircChannel == "" {
+		return
+	}
+	user.channels[ircChannel] = discordChannel
+}
+
+func loadChannels(session *discordgo.Session, guildID string) {
+	userSlice, exists := ircSessions[session.Token][guildID]
+	if !exists {
 		return
 	}
 	for _, user := range userSlice {
-		newChannels := map[string]*discordgo.Channel{} // clear user.channels
+		user.channels = map[string]*discordgo.Channel{} // clear user.channels
 		channels, _ := user.session.GuildChannels(user.guildID)
 		for _, channel := range channels {
 			if channel.Type == discordgo.ChannelTypeGuildCategory || channel.Type == discordgo.ChannelTypeGuildVoice {
 				continue
 			}
-			name := convertDiscordChannelNameToIRC(channel.Name)
-			done := false
-			var suffix string
-			for i := 0; !done; i++ {
-				if i == 0 {
-					suffix = ""
-				} else {
-					suffix = strconv.Itoa(i)
-				}
-				_, ok := newChannels[name+suffix]
-				if !ok {
-					newChannels[name+suffix] = channel
-					done = true
-				}
-			}
-			user.channels = newChannels
+			addChannel(user, channel)
 		}
 	}
 }

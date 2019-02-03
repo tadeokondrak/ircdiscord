@@ -54,8 +54,6 @@ func ircPRIVMSG(message *irc.Message, user *ircUser) {
 		return
 	}
 
-	reloadChannels(user.session, user.guildID)
-
 	channel := user.channels[message.Params[0]]
 	if channel == nil {
 		user.Encode(&irc.Message{
@@ -159,7 +157,7 @@ func ircPASS(message *irc.Message, user *ircUser) {
 	user.clientPrefix.Host = discordUser.ID
 	user.loggedin = true
 
-	reloadChannels(user.session, user.guildID)
+	loadChannels(user.session, user.guildID)
 	user.Encode(&irc.Message{
 		Prefix:  user.serverPrefix,
 		Command: irc.RPL_WELCOME,

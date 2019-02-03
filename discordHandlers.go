@@ -16,7 +16,7 @@ func addRecentlySentMessage(user *ircUser, channelID string, content string) {
 
 func isRecentlySentMessage(user *ircUser, channelID string, content string) bool {
 	// TODO: verify that the message was sent by us
-	if recentlySentMessages, ok := user.recentlySentMessages[channelID]; ok {
+	if recentlySentMessages, exists := user.recentlySentMessages[channelID]; exists {
 		for index, recentMessage := range recentlySentMessages {
 			if content == recentMessage && recentMessage != "" {
 				user.recentlySentMessages[channelID][index] = "" // remove the message from recently sent
@@ -27,21 +27,42 @@ func isRecentlySentMessage(user *ircUser, channelID string, content string) bool
 	return false
 }
 
-func channelCreate(session *discordgo.Session, channel *discordgo.ChannelUpdate) {
-	reloadChannels(session, channel.GuildID)
+func channelCreate(session *discordgo.Session, channel *discordgo.ChannelCreate) {
+	userSlice, exists := ircSessions[session.Token][channel.GuildID]
+	if !exists {
+		return
+	}
+	for _, user := range userSlice {
+		addChannel(user, channel.Channel)
+	}
+	println("channel create")
 }
 
-func channelDelete(session *discordgo.Session, channel *discordgo.ChannelUpdate) {
-	reloadChannels(session, channel.GuildID)
+func channelDelete(session *discordgo.Session, channel *discordgo.ChannelDelete) {
+	userSlice, exists := ircSessions[session.Token][channel.GuildID]
+	if !exists {
+		return
+	}
+	for _, user := range userSlice {
+		removeChannel(user, channel.Channel)
+	}
+	println("channel delete")
 }
 
 func channelUpdate(session *discordgo.Session, channel *discordgo.ChannelUpdate) {
-	reloadChannels(session, channel.GuildID)
+	userSlice, exists := ircSessions[session.Token][channel.GuildID]
+	if !exists {
+		return
+	}
+	for _, user := range userSlice {
+		updateChannel(user, channel.Channel)
+	}
+	println("channel update")
 }
 
 func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
-	userSlice, ok := ircSessions[session.Token][message.GuildID]
-	if !ok {
+	userSlice, exists := ircSessions[session.Token][message.GuildID]
+	if !exists {
 		return
 	}
 	for _, user := range userSlice {

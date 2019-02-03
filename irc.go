@@ -30,6 +30,7 @@ type ircUser struct {
 }
 
 func (user *ircUser) Close() (err error) {
+	err = user.session.Close()
 	err = user.netConn.Close()
 	return
 }

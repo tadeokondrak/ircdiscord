@@ -98,7 +98,7 @@ func convertDiscordUsernameToIRCNick(discordName string) (IRCNick string) {
 	re := regexp.MustCompile("[^a-zA-Z0-9\\[\\]\\{\\}\\^_\\-|`\\\\]+")
 	cleaned := re.ReplaceAllString(discordName, "")
 
-	IRCNick = truncate(cleaned, 9)
+	IRCNick = truncate(cleaned, 12)
 
 	if IRCNick == "" {
 		IRCNick = "_"

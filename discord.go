@@ -165,10 +165,8 @@ func loadChannels(session *discordgo.Session, guildID string) {
 }
 
 func getDiscordNick(user *ircUser, discordUser *discordgo.User) (nick string) {
-	nick = discordUser.Username
-
 	if discordUser.Discriminator == "0000" { // webhooks don't have nicknames
-		return
+		return discordUser.Username
 	}
 
 	member, err := user.session.State.Member(user.guildID, discordUser.ID)
@@ -184,11 +182,10 @@ func getDiscordNick(user *ircUser, discordUser *discordgo.User) (nick string) {
 		}
 	}
 
-	if member.Nick != "" {
-		nick = member.Nick
+	if member.Nick != "" && len(discordUser.Username) > len(member.Nick) {
+		return member.Nick
 	}
-
-	return
+	return discordUser.Username
 }
 
 func isValidDiscordNick(nick string) bool {

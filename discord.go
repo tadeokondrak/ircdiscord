@@ -59,6 +59,9 @@ func getChannelByID(user *ircUser, channelID string) (name string, channel *disc
 }
 
 func addChannel(user *ircUser, discordChannel *discordgo.Channel) {
+	if discordChannel.Type == discordgo.ChannelTypeGuildCategory || discordChannel.Type == discordgo.ChannelTypeGuildVoice {
+		return
+	}
 	ircChannel, exists := getNameForChannel(user, discordChannel)
 	if exists {
 		return
@@ -93,9 +96,6 @@ func loadChannels(session *discordgo.Session, guildID string) {
 		user.channels = map[string]*discordgo.Channel{} // clear user.channels
 		channels, _ := user.session.GuildChannels(user.guildID)
 		for _, channel := range channels {
-			if channel.Type == discordgo.ChannelTypeGuildCategory || channel.Type == discordgo.ChannelTypeGuildVoice {
-				continue
-			}
 			addChannel(user, channel)
 		}
 	}

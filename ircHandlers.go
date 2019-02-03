@@ -22,11 +22,19 @@ func ircLIST(message *irc.Message, user *ircUser) {
 		Command: irc.RPL_LISTSTART,
 		Params:  []string{user.nick, "Channel", "Users  Name"},
 	})
-	for ircChannel, discordChannel := range user.channels {
+	for ircChannel, discordChannelID := range user.channels.getMap() {
+		discordChannel, err := user.session.State.Channel(discordChannelID)
+		if err != nil {
+			discordChannel, err = user.session.Channel(discordChannelID)
+			if err != nil {
+				fmt.Println("error fetching channel data")
+				continue
+			}
+		}
 		user.Encode(&irc.Message{
 			Prefix:  user.serverPrefix,
 			Command: irc.RPL_LIST,
-			Params:  []string{user.nick, ircChannel, discordChannel.ID, convertDiscordTopicToIRC(discordChannel.Topic, user.session)},
+			Params:  []string{user.nick, ircChannel, discordChannelID, convertDiscordTopicToIRC(discordChannel.Topic, user.session)},
 		})
 	}
 	user.Encode(&irc.Message{
@@ -54,8 +62,8 @@ func ircPRIVMSG(message *irc.Message, user *ircUser) {
 		return
 	}
 
-	channel := user.channels[message.Params[0]]
-	if channel == nil {
+	channel := user.channels.get(message.Params[0])
+	if channel == "" {
 		user.Encode(&irc.Message{
 			Prefix:  user.serverPrefix,
 			Command: irc.ERR_NOSUCHCHANNEL,
@@ -66,9 +74,9 @@ func ircPRIVMSG(message *irc.Message, user *ircUser) {
 
 	content := convertIRCMessageToDiscord(message.Params[1])
 
-	addRecentlySentMessage(user, channel.ID, content)
+	addRecentlySentMessage(user, channel, content)
 
-	_, err := user.session.ChannelMessageSend(channel.ID, content)
+	_, err := user.session.ChannelMessageSend(channel, content)
 	if err != nil {
 		// TODO: map common discord errors to irc errors
 		user.Encode(&irc.Message{
@@ -158,7 +166,12 @@ func ircPASS(message *irc.Message, user *ircUser) {
 	user.clientPrefix.Host = user.discordUser.ID
 	user.loggedin = true
 
-	loadChannels(user.session, user.guildID)
+	user.channels = newSnowflakeMap()
+	channels, _ := user.session.GuildChannels(user.guildID)
+	for _, channel := range channels {
+		user.channels.addChannel(channel)
+	}
+
 	user.Encode(&irc.Message{
 		Prefix:  user.serverPrefix,
 		Command: irc.RPL_WELCOME,
@@ -180,14 +193,22 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 	}
 
 	for _, channelName := range strings.Split(message.Params[0], ",") {
-		discordChannel, ok := user.channels[channelName]
-		if !ok {
+		discordChannelID := user.channels.get(channelName)
+		if discordChannelID == "" {
 			user.Encode(&irc.Message{
 				Prefix:  user.serverPrefix,
 				Command: irc.ERR_NOSUCHCHANNEL,
 				Params:  []string{channelName, "No such channel"},
 			})
 			continue
+		}
+		discordChannel, err := user.session.State.Channel(discordChannelID)
+		if err != nil {
+			discordChannel, err = user.session.Channel(discordChannelID)
+			if err != nil {
+				fmt.Println("error fetching channel data")
+				continue
+			}
 		}
 		user.joinedChannels[channelName] = true
 		user.Encode(&irc.Message{
@@ -196,6 +217,7 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 			Params:  []string{channelName},
 		})
 		topic := convertDiscordTopicToIRC(discordChannel.Topic, user.session)
+
 		if topic != "" {
 			user.Encode(&irc.Message{
 				Prefix:  user.clientPrefix,
@@ -231,7 +253,8 @@ func ircPART(message *irc.Message, user *ircUser) {
 	}
 
 	for _, channelName := range strings.Split(message.Params[0], ",") {
-		if _, exists := user.channels[channelName]; !exists {
+		discordChannelID := user.channels.get(channelName)
+		if discordChannelID == "" {
 			user.Encode(&irc.Message{
 				Prefix:  user.serverPrefix,
 				Command: irc.ERR_NOSUCHCHANNEL,

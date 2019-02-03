@@ -10,7 +10,7 @@ func channelCreate(session *discordgo.Session, channel *discordgo.ChannelCreate)
 		return
 	}
 	for _, user := range userSlice {
-		addChannel(user, channel.Channel)
+		user.channels.addChannel(channel.Channel)
 	}
 }
 
@@ -20,18 +20,12 @@ func channelDelete(session *discordgo.Session, channel *discordgo.ChannelDelete)
 		return
 	}
 	for _, user := range userSlice {
-		removeChannel(user, channel.Channel)
+		user.channels.removeFromSnowflake(channel.Channel.ID)
 	}
 }
 
 func channelUpdate(session *discordgo.Session, channel *discordgo.ChannelUpdate) {
-	userSlice, exists := ircSessions[session.Token][channel.GuildID]
-	if !exists {
-		return
-	}
-	for _, user := range userSlice {
-		updateChannel(user, channel.Channel)
-	}
+	// TODO: handle channel name changes somehow
 }
 
 func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {

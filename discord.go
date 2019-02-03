@@ -31,22 +31,13 @@ func isRecentlySentMessage(user *ircUser, message *discordgo.Message) bool {
 }
 
 func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message) {
-	var ircChannel string
-	var discordChannel *discordgo.Channel
+	ircChannel := user.channels.getFromSnowflake(message.ChannelID)
 
-	for _ircChannel, _discordChannel := range user.channels {
-		if _discordChannel.ID == message.ChannelID {
-			ircChannel = _ircChannel
-			discordChannel = _discordChannel
-			break
-		}
-	}
-
-	if !user.joinedChannels[ircChannel] {
+	if ircChannel == "" {
 		return
 	}
 
-	if discordChannel == nil {
+	if !user.joinedChannels[ircChannel] {
 		return
 	}
 
@@ -91,8 +82,17 @@ func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message) {
 	}
 }
 
-func getNameForChannel(user *ircUser, discordChannel *discordgo.Channel) (name string, exists bool) {
-	channelName := convertDiscordChannelNameToIRC(discordChannel.Name)
+type snowflakeMap struct {
+	table map[string]string
+}
+
+func newSnowflakeMap() *snowflakeMap {
+	return &snowflakeMap{
+		table: map[string]string{},
+	}
+}
+
+func (m *snowflakeMap) add(name string, snowflake string) string {
 	var suffix string
 	for i := 0; ; i++ {
 		if i == 0 {
@@ -100,68 +100,55 @@ func getNameForChannel(user *ircUser, discordChannel *discordgo.Channel) (name s
 		} else {
 			suffix = strconv.Itoa(i)
 		}
-		name := channelName + suffix
-		_discordChannel, exists := user.channels[name]
+		_name := name + suffix
+		_, exists := m.table[_name]
 		if !exists {
-			return name, false
-		}
-		if _discordChannel.ID == discordChannel.ID {
-			return name, true
+			m.table[_name] = snowflake
+			return _name
 		}
 	}
 }
 
-// returns empty string if it can't find
-func getChannelByID(user *ircUser, channelID string) (name string, channel *discordgo.Channel) {
-	for ircChannel, discordChannel := range user.channels {
-		if discordChannel.ID == channelID {
-			return ircChannel, discordChannel
-		}
-	}
-	return "", nil
-}
-
-func addChannel(user *ircUser, discordChannel *discordgo.Channel) {
-	if discordChannel.Type == discordgo.ChannelTypeGuildCategory || discordChannel.Type == discordgo.ChannelTypeGuildVoice {
-		return
-	}
-	ircChannel, exists := getNameForChannel(user, discordChannel)
+func (m *snowflakeMap) get(name string) string {
+	snowflake, exists := m.table[name]
 	if exists {
-		return
+		return snowflake
 	}
-	user.channels[ircChannel] = discordChannel
+	return ""
 }
 
-func removeChannel(user *ircUser, discordChannel *discordgo.Channel) {
-	// TODO: kick the user if they're in it
-	ircChannel, _ := getChannelByID(user, discordChannel.ID)
-	if ircChannel == "" {
-		return
-	}
-	delete(user.channels, ircChannel)
+func (m *snowflakeMap) getMap() map[string]string {
+	return m.table
 }
 
-func updateChannel(user *ircUser, discordChannel *discordgo.Channel) {
-	// TODO: handle the channel name changing better, dunno how though
-	ircChannel, _ := getChannelByID(user, discordChannel.ID)
-	if ircChannel == "" {
-		return
-	}
-	user.channels[ircChannel] = discordChannel
-}
-
-func loadChannels(session *discordgo.Session, guildID string) {
-	userSlice, exists := ircSessions[session.Token][guildID]
-	if !exists {
-		return
-	}
-	for _, user := range userSlice {
-		user.channels = map[string]*discordgo.Channel{} // clear user.channels
-		channels, _ := user.session.GuildChannels(user.guildID)
-		for _, channel := range channels {
-			addChannel(user, channel)
+func (m *snowflakeMap) getFromSnowflake(snowflake string) string {
+	for name, _snowflake := range m.table {
+		if _snowflake == snowflake {
+			return name
 		}
 	}
+	return ""
+}
+
+func (m *snowflakeMap) removeFromSnowflake(snowflake string) string {
+	name := m.getFromSnowflake(snowflake)
+	m.remove(name)
+	return name
+}
+
+func (m *snowflakeMap) remove(name string) {
+	delete(m.table, name)
+}
+
+func (m *snowflakeMap) clear() {
+	m = newSnowflakeMap()
+}
+
+func (m *snowflakeMap) addChannel(channel *discordgo.Channel) string {
+	if channel.Type == discordgo.ChannelTypeGuildCategory || channel.Type == discordgo.ChannelTypeGuildVoice {
+		return ""
+	}
+	return m.add(convertDiscordChannelNameToIRC(channel.Name), channel.ID)
 }
 
 func getDiscordNick(user *ircUser, discordUser *discordgo.User) (nick string) {

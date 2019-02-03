@@ -29,7 +29,7 @@ func handleConnection(conn net.Conn) {
 		},
 		conn:           irc.NewConn(conn),
 		netConn:        conn,
-		channels:       map[string]*discordgo.Channel{},
+		channels:       newSnowflakeMap(),
 		joinedChannels: map[string]bool{},
 	}
 

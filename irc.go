@@ -15,9 +15,9 @@ type ircUser struct {
 	realName             string
 	hostname             string
 	discordUser          *discordgo.User
-	channels             map[string]*discordgo.Channel // channels["#channelname"] = channel
-	joinedChannels       map[string]bool
-	users                map[string]*discordgo.User
+	channels             *snowflakeMap
+	users                *snowflakeMap
+	joinedChannels       map[string]bool // TODO: make this a list of IDs, not channels
 	token                string
 	guildID              string
 	loggedin             bool
@@ -63,7 +63,7 @@ func truncate(str string, chars int) string {
 }
 
 func convertDiscordChannelNameToIRC(discordName string) (IRCName string) {
-	re := regexp.MustCompile("[^a-zA-Z0-9#\\-]+")
+	re := regexp.MustCompile(`[^a-zA-Z0-9#\-]+`)
 	cleaned := re.ReplaceAllString(discordName, "")
 	return truncate("#"+cleaned, 50)
 }

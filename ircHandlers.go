@@ -179,10 +179,7 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 		user.Encode(&irc.Message{
 			Prefix:  user.serverPrefix,
 			Command: irc.ERR_NEEDMOREPARAMS,
-			Params: []string{
-				user.nick,
-				irc.JOIN,
-				"Not enough parameters"},
+			Params:  []string{user.nick, irc.JOIN, "Not enough parameters"},
 		})
 		return
 	}

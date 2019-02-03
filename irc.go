@@ -115,7 +115,5 @@ func convertDiscordTopicToIRC(discordContent string, session *discordgo.Session)
 }
 
 func convertDiscordContentToIRC(discordContent string, session *discordgo.Session) (ircContent string) {
-	newlines := regexp.MustCompile("[\n]+")
-	ircContent = newlines.ReplaceAllString(discordContent, "")
-	return
+	return discordContent
 }

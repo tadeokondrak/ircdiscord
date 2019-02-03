@@ -63,6 +63,8 @@ func handleConnection(conn net.Conn) {
 				go ircWHOIS(message, user)
 			case irc.LIST:
 				go ircLIST(message, user)
+			case irc.PART:
+				go ircPART(message, user)
 			}
 		} else {
 			if message.Command == irc.PASS {

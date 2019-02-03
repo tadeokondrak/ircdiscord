@@ -171,11 +171,6 @@ func ircPASS(message *irc.Message, user *ircUser) {
 
 func ircJOIN(message *irc.Message, user *ircUser) {
 	if len(message.Params) < 1 {
-		// ERR_NEEDMOREPARAMS              ERR_BANNEDFROMCHAN
-		// ERR_INVITEONLYCHAN              ERR_BADCHANNELKEY
-		// ERR_CHANNELISFULL               ERR_BADCHANMASK
-		// ERR_NOSUCHCHANNEL               ERR_TOOMANYCHANNELS
-		// RPL_TOPIC
 		user.Encode(&irc.Message{
 			Prefix:  user.serverPrefix,
 			Command: irc.ERR_NEEDMOREPARAMS,
@@ -222,6 +217,42 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 				sendMessageFromDiscordToIRC(user, messages[i-1])
 			}
 		}(user, discordChannel)
+	}
+}
+
+func ircPART(message *irc.Message, user *ircUser) {
+	if len(message.Params) < 1 {
+		user.Encode(&irc.Message{
+			Prefix:  user.serverPrefix,
+			Command: irc.ERR_NEEDMOREPARAMS,
+			Params:  []string{user.nick, irc.JOIN, "Not enough parameters"},
+		})
+		return
+	}
+
+	for _, channelName := range strings.Split(message.Params[0], ",") {
+		if _, exists := user.channels[channelName]; !exists {
+			user.Encode(&irc.Message{
+				Prefix:  user.serverPrefix,
+				Command: irc.ERR_NOSUCHCHANNEL,
+				Params:  []string{channelName, "No such channel"},
+			})
+			continue
+		}
+		if _, exists := user.joinedChannels[channelName]; !exists {
+			user.Encode(&irc.Message{
+				Prefix:  user.serverPrefix,
+				Command: irc.ERR_NOTONCHANNEL,
+				Params:  []string{channelName, "You're not on that channel"},
+			})
+			continue
+		}
+		user.joinedChannels[channelName] = false
+		user.Encode(&irc.Message{
+			Prefix:  user.clientPrefix,
+			Command: irc.PART,
+			Params:  []string{channelName},
+		})
 	}
 }
 

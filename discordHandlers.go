@@ -25,45 +25,53 @@ func isRecentlySentMessage(user *ircUser, channelID string, content string) bool
 }
 
 func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
-	if userSlice, ok := ircSessions[session.Token][message.GuildID]; ok {
-		for _, user := range userSlice {
-			if channel, ok := user.channels[message.ChannelID]; ok {
-				if isRecentlySentMessage(user, message.ChannelID, message.Content) {
-					continue
-				}
-				nick := getDiscordNick(user, message.Author)
-				prefix := &irc.Prefix{
-					Name: convertDiscordUsernameToIRC(nick),
-					User: convertDiscordUsernameToIRC(message.Author.Username),
-					Host: message.Author.ID,
-				}
-				// TODO: convert discord nicks to the irc nicks shown
-				discordContent, err := message.ContentWithMoreMentionsReplaced(session)
-				if err != nil {
-					discordContent = message.ContentWithMentionsReplaced()
-				}
-				content := convertDiscordContentToIRC(discordContent, session) // SPLIT BY LINES AFTER
-				if content != "" {
-					user.Encode(&irc.Message{
-						Prefix:  prefix,
-						Command: irc.PRIVMSG,
-						Params: []string{
-							channel,
-							content,
-						},
-					})
-				}
-				for _, attachment := range message.Attachments {
-					user.Encode(&irc.Message{
-						Prefix:  prefix,
-						Command: irc.PRIVMSG,
-						Params: []string{
-							channel,
-							convertDiscordContentToIRC(attachment.URL, session),
-						},
-					})
-				}
-			}
+	userSlice, ok := ircSessions[session.Token][message.GuildID]
+	if !ok {
+		return
+	}
+	for _, user := range userSlice {
+		channel, ok := user.channels[message.ChannelID]
+
+		if !ok {
+			continue
+		}
+
+		if isRecentlySentMessage(user, message.ChannelID, message.Content) {
+			continue
+		}
+
+		nick := getDiscordNick(user, message.Author)
+		prefix := &irc.Prefix{
+			Name: convertDiscordUsernameToIRC(nick),
+			User: convertDiscordUsernameToIRC(message.Author.Username),
+			Host: message.Author.ID,
+		}
+
+		// TODO: convert discord nicks to the irc nicks shown
+		discordContent, err := message.ContentWithMoreMentionsReplaced(session)
+		_ = err
+
+		content := convertDiscordContentToIRC(discordContent, session) // SPLIT BY LINES AFTER
+		if content != "" {
+			user.Encode(&irc.Message{
+				Prefix:  prefix,
+				Command: irc.PRIVMSG,
+				Params: []string{
+					channel,
+					content,
+				},
+			})
+		}
+
+		for _, attachment := range message.Attachments {
+			user.Encode(&irc.Message{
+				Prefix:  prefix,
+				Command: irc.PRIVMSG,
+				Params: []string{
+					channel,
+					convertDiscordContentToIRC(attachment.URL, session),
+				},
+			})
 		}
 	}
 }

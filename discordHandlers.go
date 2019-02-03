@@ -15,7 +15,6 @@ func channelCreate(session *discordgo.Session, channel *discordgo.ChannelCreate)
 	for _, user := range userSlice {
 		addChannel(user, channel.Channel)
 	}
-	println("channel create")
 }
 
 func channelDelete(session *discordgo.Session, channel *discordgo.ChannelDelete) {
@@ -26,7 +25,6 @@ func channelDelete(session *discordgo.Session, channel *discordgo.ChannelDelete)
 	for _, user := range userSlice {
 		removeChannel(user, channel.Channel)
 	}
-	println("channel delete")
 }
 
 func channelUpdate(session *discordgo.Session, channel *discordgo.ChannelUpdate) {
@@ -37,7 +35,6 @@ func channelUpdate(session *discordgo.Session, channel *discordgo.ChannelUpdate)
 	for _, user := range userSlice {
 		updateChannel(user, channel.Channel)
 	}
-	println("channel update")
 }
 
 func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {

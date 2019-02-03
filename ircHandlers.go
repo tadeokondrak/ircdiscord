@@ -139,7 +139,8 @@ func ircPASS(message *irc.Message, user *ircUser) {
 	}
 	ircSessions[user.session.Token][user.guildID] = append(ircSessions[user.session.Token][user.guildID], user)
 
-	discordUser, err := user.session.User("@me")
+	var err error
+	user.discordUser, err = user.session.User("@me")
 	if err != nil {
 		user.Encode(&irc.Message{
 			Prefix:  user.serverPrefix,
@@ -150,11 +151,11 @@ func ircPASS(message *irc.Message, user *ircUser) {
 		return
 	}
 
-	user.nick = convertDiscordUsernameToIRC(getDiscordNick(user, discordUser))
-	user.realName = convertDiscordUsernameToIRC(discordUser.Username)
+	user.nick = convertDiscordUsernameToIRC(getDiscordNick(user, user.discordUser))
+	user.realName = convertDiscordUsernameToIRC(user.discordUser.Username)
 	user.clientPrefix.Name = user.nick
 	user.clientPrefix.User = user.realName
-	user.clientPrefix.Host = discordUser.ID
+	user.clientPrefix.Host = user.discordUser.ID
 	user.loggedin = true
 
 	loadChannels(user.session, user.guildID)

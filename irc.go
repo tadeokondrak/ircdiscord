@@ -14,6 +14,7 @@ type ircUser struct {
 	nick                 string
 	realName             string
 	hostname             string
+	discordUser          *discordgo.User
 	channels             map[string]*discordgo.Channel // channels["#channelname"] = channel
 	joinedChannels       map[string]bool
 	users                map[string]*discordgo.User

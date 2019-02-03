@@ -15,12 +15,14 @@ func addRecentlySentMessage(user *ircUser, channelID string, content string) {
 	user.recentlySentMessages[channelID] = append(user.recentlySentMessages[channelID], content)
 }
 
-func isRecentlySentMessage(user *ircUser, channelID string, content string) bool {
-	// TODO: verify that the message was sent by us
-	if recentlySentMessages, exists := user.recentlySentMessages[channelID]; exists {
+func isRecentlySentMessage(user *ircUser, message *discordgo.Message) bool {
+	if user.discordUser.ID != message.Author.ID {
+		return false
+	}
+	if recentlySentMessages, exists := user.recentlySentMessages[message.ChannelID]; exists {
 		for index, recentMessage := range recentlySentMessages {
-			if content == recentMessage && recentMessage != "" {
-				user.recentlySentMessages[channelID][index] = "" // remove the message from recently sent
+			if message.Content == recentMessage && recentMessage != "" {
+				user.recentlySentMessages[message.ChannelID][index] = "" // remove the message from recently sent
 				return true
 			}
 		}

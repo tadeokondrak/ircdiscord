@@ -65,7 +65,7 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 			continue
 		}
 
-		if isRecentlySentMessage(user, message.ChannelID, message.Content) {
+		if isRecentlySentMessage(user, message.Message) {
 			continue
 		}
 

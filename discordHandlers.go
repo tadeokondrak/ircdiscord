@@ -7,26 +7,6 @@ import (
 	"gopkg.in/sorcix/irc.v2"
 )
 
-func addRecentlySentMessage(user *ircUser, channelID string, content string) {
-	if user.recentlySentMessages == nil {
-		user.recentlySentMessages = map[string][]string{}
-	}
-	user.recentlySentMessages[channelID] = append(user.recentlySentMessages[channelID], content)
-}
-
-func isRecentlySentMessage(user *ircUser, channelID string, content string) bool {
-	// TODO: verify that the message was sent by us
-	if recentlySentMessages, exists := user.recentlySentMessages[channelID]; exists {
-		for index, recentMessage := range recentlySentMessages {
-			if content == recentMessage && recentMessage != "" {
-				user.recentlySentMessages[channelID][index] = "" // remove the message from recently sent
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func channelCreate(session *discordgo.Session, channel *discordgo.ChannelCreate) {
 	userSlice, exists := ircSessions[session.Token][channel.GuildID]
 	if !exists {

@@ -218,8 +218,8 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 				})
 				return
 			}
-			for _, message := range messages {
-				sendMessageFromDiscordToIRC(user, message)
+			for i := len(messages); i != 0; i-- { // Discord sends them in reverse order
+				sendMessageFromDiscordToIRC(user, messages[i-1])
 			}
 		}(user, discordChannel)
 	}

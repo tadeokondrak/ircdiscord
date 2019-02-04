@@ -26,7 +26,7 @@ func addRecentlySentMessage(user *ircUser, channelID string, content string) {
 }
 
 func isRecentlySentMessage(user *ircUser, message *discordgo.Message) bool {
-	if message == nil || user.discordUser == nil {
+	if message.Author == nil || user.discordUser == nil {
 		return false
 	}
 	if user.discordUser.ID != message.Author.ID {

@@ -86,7 +86,7 @@ func ircPRIVMSG(message *irc.Message, user *ircUser) {
 		return
 	}
 
-	content := convertIRCMessageToDiscord(message.Params[1])
+	content := convertIRCMessageToDiscord(user, message.Params[1])
 
 	addRecentlySentMessage(user, channel, content)
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -9,6 +10,20 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"gopkg.in/sorcix/irc.v2"
 )
+
+func replaceMentions(user *ircUser, message *discordgo.Message) (content string) {
+	content = message.Content
+	for _, mentionedUser := range message.Mentions {
+		username := user.users.getFromSnowflake(mentionedUser.ID)
+		if username != "" {
+			content = strings.NewReplacer(
+				"<@"+mentionedUser.ID+">", "\x0312\x02@"+username+"\x0f",
+				"<@!"+mentionedUser.ID+">", "@\x0312\x02@"+username+"\x0f",
+			).Replace(content)
+		}
+	}
+	return
+}
 
 func getTimeFromSnowflake(snowflake string) time.Time {
 	var snowInt, unix uint64
@@ -43,18 +58,20 @@ func isRecentlySentMessage(user *ircUser, message *discordgo.Message) bool {
 	return false
 }
 
+func convertIRCMentionsToDiscord(user *ircUser, message string) (content string) {
+	startMessageMentionRegex := regexp.MustCompile(`^([^:]+):`)
+	matches := startMessageMentionRegex.FindAllStringSubmatchIndex(message, -1)
+	fmt.Println(matches)
+	if len(matches) == 0 {
+		return message
+	}
+	return "<@" + user.users.get(message[matches[0][2]:matches[0][3]]) + ">" + message[matches[0][1]:]
+}
+
 func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message, prefixString string) {
 	ircChannel := user.channels.getFromSnowflake(message.ChannelID)
 
-	if ircChannel == "" {
-		return
-	}
-
-	if !user.joinedChannels[ircChannel] {
-		return
-	}
-
-	if isRecentlySentMessage(user, message) {
+	if ircChannel == "" || !user.joinedChannels[ircChannel] || isRecentlySentMessage(user, message) || message.Author == nil {
 		return
 	}
 
@@ -65,9 +82,8 @@ func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message, pref
 		Host: message.Author.ID,
 	}
 
-	// TODO: convert discord nicks to the irc nicks shown
-	discordContent, err := message.ContentWithMoreMentionsReplaced(user.session)
-	_ = err
+	// TODO: check if edited and put (edited) with low contrast
+	discordContent := replaceMentions(user, message)
 
 	content := prefixString + convertDiscordContentToIRC(discordContent, user.session)
 	if content != "" {
@@ -99,7 +115,9 @@ func isValidDiscordNick(nick string) bool {
 	return true
 }
 
-func convertIRCMessageToDiscord(ircMessage string) (discordMessage string) {
-	discordMessage = strings.TrimSpace(ircMessage)
-	return ircMessage
+func convertIRCMessageToDiscord(user *ircUser, ircMessage string) (discordMessage string) {
+	discordMessage = ircMessage
+	discordMessage = strings.TrimSpace(discordMessage)
+	discordMessage = convertIRCMentionsToDiscord(user, discordMessage)
+	return discordMessage
 }

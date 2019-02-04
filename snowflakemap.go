@@ -88,6 +88,9 @@ func (m *snowflakeMap) addUser(user *discordgo.User) string {
 }
 
 func (m *snowflakeMap) getNick(discordUser *discordgo.User) string {
+	if discordUser == nil {
+		return ""
+	}
 	username := convertDiscordUsernameToIRCNick(discordUser.Username)
 	if discordUser.Discriminator == "0000" { // webhooks don't have nicknames
 		return username + "@w"

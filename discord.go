@@ -17,7 +17,7 @@ func replaceMentions(user *ircUser, message *discordgo.Message) (content string)
 		if username != "" {
 			content = strings.NewReplacer(
 				"<@"+mentionedUser.ID+">", "\x0312\x02@"+username+"\x0f",
-				"<@!"+mentionedUser.ID+">", "@\x0312\x02@"+username+"\x0f",
+				"<@!"+mentionedUser.ID+">", "\x0312\x02@"+username+"\x0f",
 			).Replace(content)
 		}
 	}
@@ -56,6 +56,7 @@ func isRecentlySentMessage(user *ircUser, message *discordgo.Message) bool {
 }
 
 func convertIRCMentionsToDiscord(user *ircUser, message string) (content string) {
+	// TODO: allow chained mentions (`user1: user2: `)
 	startMessageMentionRegex := regexp.MustCompile(`^([^:]+):\ `)
 	matches := startMessageMentionRegex.FindAllStringSubmatchIndex(message, -1)
 	if len(matches) == 0 {

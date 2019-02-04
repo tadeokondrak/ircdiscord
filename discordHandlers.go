@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/bwmarrin/discordgo"
+	"github.com/dustin/go-humanize"
 	"gopkg.in/sorcix/irc.v2"
 )
 
@@ -11,7 +12,7 @@ func messageUpdate(session *discordgo.Session, message *discordgo.MessageUpdate)
 		return
 	}
 	for _, user := range userSlice {
-		sendMessageFromDiscordToIRC(user, message.Message, "\x02\x0308edited to:\x0f ")
+		sendMessageFromDiscordToIRC(user, message.Message, "\x0308message sent \x0f\x02"+humanize.Time(getTimeFromSnowflake(message.ID))+"\x0f \x0308edited to:\n")
 	}
 }
 
@@ -22,11 +23,11 @@ func messageDelete(session *discordgo.Session, message *discordgo.MessageDelete)
 	}
 	for _, user := range userSlice {
 		user.Encode(&irc.Message{
-			Prefix:  &irc.Prefix{},
+			Prefix:  user.serverPrefix,
 			Command: irc.PRIVMSG,
 			Params: []string{
 				user.channels.getFromSnowflake(message.ChannelID),
-				"\x0304a message in this channel was deleted",
+				"\x0304message sent \x0f\x02" + humanize.Time(getTimeFromSnowflake(message.ID)) + "\x0f \x0304in this channel was deleted",
 			},
 		})
 		return

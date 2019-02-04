@@ -1,14 +1,24 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"gopkg.in/sorcix/irc.v2"
 )
 
+func getTimeFromSnowflake(snowflake string) time.Time {
+	var snowInt, unix uint64
+	snowInt, _ = strconv.ParseUint(snowflake, 10, 64)
+	fmt.Println(snowInt)
+	unix = (snowInt >> 22) + 1420070400000
+	fmt.Println(unix)
+	return time.Unix(0, int64(unix)*1000000)
+}
 func addRecentlySentMessage(user *ircUser, channelID string, content string) {
 	if user.recentlySentMessages == nil {
 		user.recentlySentMessages = map[string][]string{}
@@ -17,6 +27,9 @@ func addRecentlySentMessage(user *ircUser, channelID string, content string) {
 }
 
 func isRecentlySentMessage(user *ircUser, message *discordgo.Message) bool {
+	if message == nil {
+		return false
+	}
 	if user.discordUser.ID != message.Author.ID {
 		return false
 	}

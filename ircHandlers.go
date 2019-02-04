@@ -151,6 +151,9 @@ func ircPASS(message *irc.Message, user *ircUser) {
 			return
 		}
 		user.session.AddHandler(messageCreate)
+		user.session.AddHandler(messageUpdate)
+		user.session.AddHandler(messageDelete)
+
 		user.session.AddHandler(channelUpdate)
 		user.session.AddHandler(channelDelete)
 		user.session.AddHandler(channelCreate)
@@ -269,7 +272,7 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 				return
 			}
 			for i := len(messages); i != 0; i-- { // Discord sends them in reverse order
-				sendMessageFromDiscordToIRC(user, messages[i-1])
+				sendMessageFromDiscordToIRC(user, messages[i-1], "") // TODO: maybe prefix with date
 			}
 		}(user, discordChannel)
 		go ircNAMES(&irc.Message{Command: irc.NAMES, Params: []string{channelName}}, user)

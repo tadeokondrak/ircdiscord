@@ -31,7 +31,7 @@ func isRecentlySentMessage(user *ircUser, message *discordgo.Message) bool {
 	return false
 }
 
-func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message) {
+func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message, prefixString string) {
 	ircChannel := user.channels.getFromSnowflake(message.ChannelID)
 
 	if ircChannel == "" {
@@ -65,7 +65,7 @@ func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message) {
 				Command: irc.PRIVMSG,
 				Params: []string{
 					ircChannel,
-					line,
+					prefixString + line,
 				},
 			})
 		}

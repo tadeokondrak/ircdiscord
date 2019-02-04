@@ -63,7 +63,7 @@ func truncate(str string, chars int) string {
 }
 
 func convertDiscordChannelNameToIRC(discordName string) (IRCName string) {
-	re := regexp.MustCompile(`[^a-zA-Z0-9#\-]+`)
+	re := regexp.MustCompile(`[\07\n#,]+`)
 	cleaned := re.ReplaceAllString(discordName, "")
 	return truncate("#"+cleaned, 50)
 }

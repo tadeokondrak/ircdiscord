@@ -3,6 +3,7 @@ package main
 import (
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/bwmarrin/discordgo"
 	"gopkg.in/sorcix/irc.v2"
@@ -45,10 +46,10 @@ func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message) {
 		return
 	}
 
-	nick := getDiscordNick(user, message.Author)
+	nick := user.users.getNick(message.Author)
 	prefix := &irc.Prefix{
-		Name: convertDiscordUsernameToIRCNick(nick),
-		User: convertDiscordUsernameToIRCUser(message.Author.Username),
+		Name: nick,
+		User: nick,
 		Host: message.Author.ID,
 	}
 
@@ -84,6 +85,7 @@ func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message) {
 
 type snowflakeMap struct {
 	table map[string]string
+	sync.Mutex
 }
 
 func newSnowflakeMap() *snowflakeMap {
@@ -92,13 +94,15 @@ func newSnowflakeMap() *snowflakeMap {
 	}
 }
 
-func (m *snowflakeMap) add(name string, snowflake string) string {
+func (m *snowflakeMap) add(name string, snowflake string, separator string) string {
+	m.Lock()
+	defer m.Unlock()
 	var suffix string
 	for i := 0; ; i++ {
 		if i == 0 {
 			suffix = ""
 		} else {
-			suffix = strconv.Itoa(i)
+			suffix = separator + strconv.Itoa(i)
 		}
 		_name := name + suffix
 		_, exists := m.table[_name]
@@ -145,35 +149,47 @@ func (m *snowflakeMap) clear() {
 }
 
 func (m *snowflakeMap) addChannel(channel *discordgo.Channel) string {
-	if channel.Type == discordgo.ChannelTypeGuildCategory || channel.Type == discordgo.ChannelTypeGuildVoice {
+	if channel.Type != discordgo.ChannelTypeGuildText && channel.Type != discordgo.ChannelTypeDM {
 		return ""
 	}
-	return m.add(convertDiscordChannelNameToIRC(channel.Name), channel.ID)
+	return m.add(convertDiscordChannelNameToIRC(channel.Name), channel.ID, "#")
 }
 
-func getDiscordNick(user *ircUser, discordUser *discordgo.User) (nick string) {
+func (m *snowflakeMap) addUser(user *discordgo.User) string {
+	if user.Discriminator == "0000" {
+		// We don't add users for webhooks because they're not users
+		return ""
+	}
+	return m.add(convertDiscordUsernameToIRCNick(user.Username), user.ID, "@")
+}
+
+func (m *snowflakeMap) getNick(discordUser *discordgo.User) string {
+	username := convertDiscordUsernameToIRCNick(discordUser.Username)
 	if discordUser.Discriminator == "0000" { // webhooks don't have nicknames
-		return discordUser.Username
+		return username + "@w"
 	}
-
-	member, err := user.session.State.Member(user.guildID, discordUser.ID)
-	if err != nil {
-		member, err = user.session.GuildMember(user.guildID, discordUser.ID)
-		if err != nil {
-			user.Encode(&irc.Message{
-				Prefix:  user.serverPrefix,
-				Command: irc.NOTICE,
-				Params:  []string{user.nick, "There was an error getting member data from Discord."},
-			})
-			return
-		}
-	}
-
-	if member.Nick != "" && len(discordUser.Username) > len(member.Nick) {
-		return member.Nick
-	}
-	return discordUser.Username
+	return username
 }
+
+// func getDiscordNick(user *ircUser, discordUser *discordgo.User) (nick string) {
+// 	member, err := user.session.State.Member(user.guildID, discordUser.ID)
+// 	if err != nil {
+// 		member, err = user.session.GuildMember(user.guildID, discordUser.ID)
+// 		if err != nil {
+// 			user.Encode(&irc.Message{
+// 				Prefix:  user.serverPrefix,
+// 				Command: irc.NOTICE,
+// 				Params:  []string{user.nick, "There was an error getting member data from Discord."},
+// 			})
+// 			return
+// 		}
+// 	}
+//
+// 	if member.Nick != "" && len(discordUser.Username) > len(member.Nick) {
+// 		return member.Nick
+// 	}
+// 	return discordUser.Username
+// }
 
 func isValidDiscordNick(nick string) bool {
 	return true

@@ -12,6 +12,20 @@ func ircWHOIS(message *irc.Message, user *ircUser) {
 
 }
 
+func ircNAMES(message *irc.Message, user *ircUser) {
+	if len(message.Params) < 1 {
+		// TODO: show names for every channel the user's on
+		return
+	}
+	for ircNick := range user.users.getMap() {
+		user.Encode(&irc.Message{
+			Prefix:  user.serverPrefix,
+			Command: irc.RPL_NAMREPLY,
+			Params:  []string{user.nick, message.Params[0], ircNick},
+		})
+	}
+}
+
 func ircLIST(message *irc.Message, user *ircUser) {
 	if len(message.Params) > 0 {
 		// TODO
@@ -159,7 +173,7 @@ func ircPASS(message *irc.Message, user *ircUser) {
 		return
 	}
 
-	user.nick = convertDiscordUsernameToIRCNick(getDiscordNick(user, user.discordUser))
+	user.nick = user.users.getNick(user.discordUser)
 	user.realName = convertDiscordUsernameToIRCRealname(user.discordUser.Username)
 	user.clientPrefix.Name = user.nick
 	user.clientPrefix.User = user.realName
@@ -167,9 +181,28 @@ func ircPASS(message *irc.Message, user *ircUser) {
 	user.loggedin = true
 
 	user.channels = newSnowflakeMap()
-	channels, _ := user.session.GuildChannels(user.guildID)
+	channels, err := user.session.GuildChannels(user.guildID)
+	if err != nil {
+		user.Encode(&irc.Message{
+			Prefix:  user.serverPrefix,
+			Command: irc.NOTICE,
+			Params:  []string{user.nick, "There was an error getting channels from Discord."},
+		})
+	}
 	for _, channel := range channels {
-		user.channels.addChannel(channel)
+		go user.channels.addChannel(channel)
+	}
+
+	members, err := user.session.GuildMembers(user.guildID, "", 1000)
+	if err != nil {
+		user.Encode(&irc.Message{
+			Prefix:  user.serverPrefix,
+			Command: irc.NOTICE,
+			Params:  []string{user.nick, "There was an error getting users from Discord."},
+		})
+	}
+	for _, member := range members {
+		user.users.addUser(member.User)
 	}
 
 	user.Encode(&irc.Message{
@@ -226,7 +259,7 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 			})
 		}
 		go func(user *ircUser, channel *discordgo.Channel) {
-			messages, err := user.session.ChannelMessages(channel.ID, 25, "", "", "")
+			messages, err := user.session.ChannelMessages(channel.ID, 100, "", "", "")
 			if err != nil {
 				user.Encode(&irc.Message{
 					Prefix:  user.serverPrefix,
@@ -239,6 +272,7 @@ func ircJOIN(message *irc.Message, user *ircUser) {
 				sendMessageFromDiscordToIRC(user, messages[i-1])
 			}
 		}(user, discordChannel)
+		go ircNAMES(&irc.Message{Command: irc.NAMES, Params: []string{channelName}}, user)
 	}
 }
 

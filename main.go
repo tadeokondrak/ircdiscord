@@ -30,6 +30,7 @@ func handleConnection(conn net.Conn) {
 		conn:           irc.NewConn(conn),
 		netConn:        conn,
 		channels:       newSnowflakeMap(),
+		users:          newSnowflakeMap(),
 		joinedChannels: map[string]bool{},
 	}
 
@@ -65,6 +66,8 @@ func handleConnection(conn net.Conn) {
 				go ircLIST(message, user)
 			case irc.PART:
 				go ircPART(message, user)
+			case irc.NAMES:
+				go ircNAMES(message, user)
 			}
 		} else {
 			if message.Command == irc.PASS {

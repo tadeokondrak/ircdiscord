@@ -18,6 +18,7 @@ Run the program, and in your IRC client, connect to `127.0.0.1` with the server 
 - Receiving messages
 - Sending messages
 - /list for a list of channels
+- List of members (/list, or the sidebar of your client)
 
 # Licence
 

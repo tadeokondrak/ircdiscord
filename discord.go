@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -28,9 +27,7 @@ func replaceMentions(user *ircUser, message *discordgo.Message) (content string)
 func getTimeFromSnowflake(snowflake string) time.Time {
 	var snowInt, unix uint64
 	snowInt, _ = strconv.ParseUint(snowflake, 10, 64)
-	fmt.Println(snowInt)
 	unix = (snowInt >> 22) + 1420070400000
-	fmt.Println(unix)
 	return time.Unix(0, int64(unix)*1000000)
 }
 func addRecentlySentMessage(user *ircUser, channelID string, content string) {
@@ -61,7 +58,6 @@ func isRecentlySentMessage(user *ircUser, message *discordgo.Message) bool {
 func convertIRCMentionsToDiscord(user *ircUser, message string) (content string) {
 	startMessageMentionRegex := regexp.MustCompile(`^([^:]+):`)
 	matches := startMessageMentionRegex.FindAllStringSubmatchIndex(message, -1)
-	fmt.Println(matches)
 	if len(matches) == 0 {
 		return message
 	}

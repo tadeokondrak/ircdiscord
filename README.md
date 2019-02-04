@@ -1,6 +1,6 @@
 # IRCdiscord
 
-[![CircleCI](https://circleci.com/gh/tadeokondrak/IRCdiscord/tree/master.svg?style=svg)](https://circleci.com/gh/tadeokondrak/IRCdiscord/tree/master)
+[![CircleCI](https://circleci.com/gh/tadeokondrak/IRCdiscord/tree/master.svg?style=svg)](https://circleci.com/gh/tadeokondrak/IRCdiscord/tree/master) [![Discord](https://img.shields.io/discord/541500289430192150.svg?logo=discord&style=flat-square)](https://discord.gg/TeJbfad)
 
 An IRCd that lets you talk to Discord users.
 

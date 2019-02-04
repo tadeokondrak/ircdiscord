@@ -19,6 +19,7 @@ Run the program, and in your IRC client, connect to `127.0.0.1` with the server 
 - Sending messages
 - /list for a list of channels
 - List of members (/list, or the sidebar of your client)
+- Pinging other people, with IRC style `nick: ` at the start of a message
 
 # Licence
 

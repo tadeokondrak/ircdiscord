@@ -7,8 +7,7 @@ jobs:
     steps:
       - checkout
 
-      - run: go get github.com/bwmarrin/discordgo
-      - run: go get gopkg.in/sorcix/irc.v2
+      - run: go get
 
       - run:
           name: Set up output directories

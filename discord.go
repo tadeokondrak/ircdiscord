@@ -56,12 +56,16 @@ func isRecentlySentMessage(user *ircUser, message *discordgo.Message) bool {
 }
 
 func convertIRCMentionsToDiscord(user *ircUser, message string) (content string) {
-	startMessageMentionRegex := regexp.MustCompile(`^([^:]+):`)
+	startMessageMentionRegex := regexp.MustCompile(`^([^:]+):\ `)
 	matches := startMessageMentionRegex.FindAllStringSubmatchIndex(message, -1)
 	if len(matches) == 0 {
 		return message
 	}
-	return "<@" + user.users.get(message[matches[0][2]:matches[0][3]]) + ">" + message[matches[0][1]:]
+	discordID := user.users.get(message[matches[0][2]:matches[0][3]])
+	if discordID != "" {
+		return "<@" + discordID + ">" + message[matches[0][1]:]
+	}
+	return message
 }
 
 func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message, prefixString string) {

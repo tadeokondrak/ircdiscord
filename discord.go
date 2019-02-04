@@ -63,7 +63,7 @@ func convertIRCMentionsToDiscord(user *ircUser, message string) (content string)
 	}
 	discordID := user.users.get(message[matches[0][2]:matches[0][3]])
 	if discordID != "" {
-		return "<@" + discordID + ">" + message[matches[0][1]:]
+		return "<@" + discordID + "> " + message[matches[0][1]:]
 	}
 	return message
 }

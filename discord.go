@@ -171,26 +171,6 @@ func (m *snowflakeMap) getNick(discordUser *discordgo.User) string {
 	return username
 }
 
-// func getDiscordNick(user *ircUser, discordUser *discordgo.User) (nick string) {
-// 	member, err := user.session.State.Member(user.guildID, discordUser.ID)
-// 	if err != nil {
-// 		member, err = user.session.GuildMember(user.guildID, discordUser.ID)
-// 		if err != nil {
-// 			user.Encode(&irc.Message{
-// 				Prefix:  user.serverPrefix,
-// 				Command: irc.NOTICE,
-// 				Params:  []string{user.nick, "There was an error getting member data from Discord."},
-// 			})
-// 			return
-// 		}
-// 	}
-//
-// 	if member.Nick != "" && len(discordUser.Username) > len(member.Nick) {
-// 		return member.Nick
-// 	}
-// 	return discordUser.Username
-// }
-
 func isValidDiscordNick(nick string) bool {
 	return true
 }

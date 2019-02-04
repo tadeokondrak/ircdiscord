@@ -57,7 +57,7 @@ func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message, pref
 	discordContent, err := message.ContentWithMoreMentionsReplaced(user.session)
 	_ = err
 
-	content := convertDiscordContentToIRC(discordContent, user.session)
+	content := prefixString + convertDiscordContentToIRC(discordContent, user.session)
 	if content != "" {
 		for _, line := range strings.Split(content, "\n") {
 			user.Encode(&irc.Message{
@@ -65,7 +65,7 @@ func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message, pref
 				Command: irc.PRIVMSG,
 				Params: []string{
 					ircChannel,
-					prefixString + line,
+					line,
 				},
 			})
 		}

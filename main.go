@@ -2,8 +2,12 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
+	"flag"
 	"fmt"
+	"log"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -106,7 +110,36 @@ func handleConnection(conn net.Conn) {
 }
 
 func main() {
-	server, err := net.Listen("tcp4", ":6667")
+	tlsEnabled := flag.Bool("tls", false, "Enable TLS encrypted connections.")
+	portFlag := flag.Int("port", 0, "Port to listen on. If unspecified, will listen on 6667 if TLS is disabled or 6697 if enabled.")
+	address := flag.String("address", "127.0.0.1", "Address to listen on. Set to \"0.0.0.0\" to listen on all interfaces, leave default if you're connecting from the same computer as the server.")
+	certfile := flag.String("certfile", "", "For TLS: certificate file.")
+	keyfile := flag.String("keyfile", "", "For TLS: key file.")
+	flag.Parse()
+
+	if *tlsEnabled && (*certfile == "" || *keyfile == "") {
+		log.Fatalln("certfile and keyfile must be specified if tls is enabled")
+	}
+
+	port := strconv.Itoa(*portFlag)
+
+	var err error
+	var server net.Listener
+	if *tlsEnabled {
+		if port == "0" {
+			port = "6697"
+		}
+		cert, err := tls.LoadX509KeyPair(*certfile, *keyfile)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		server, err = tls.Listen("tcp", *address+":"+port, &tls.Config{Certificates: []tls.Certificate{cert}})
+	} else {
+		if port == "0" {
+			port = "6667"
+		}
+		server, err = net.Listen("tcp", *address+":"+port)
+	}
 	if err != nil {
 		fmt.Println(err)
 		return

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"gopkg.in/sorcix/irc.v2"
+	"github.com/tadeokondrak/irc"
 )
 
 func (c *ircConn) handleCAP(m *irc.Message) {

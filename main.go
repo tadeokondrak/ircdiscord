@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"gopkg.in/sorcix/irc.v2"
+	"github.com/tadeokondrak/irc"
 )
 
 const (

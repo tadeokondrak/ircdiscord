@@ -15,7 +15,7 @@ import (
 	"github.com/tadeokondrak/IRCdiscord/snowflakemap"
 
 	"github.com/bwmarrin/discordgo"
-	"gopkg.in/sorcix/irc.v2"
+	"github.com/tadeokondrak/irc"
 )
 
 type guildSessionType int
@@ -227,7 +227,7 @@ type ircConn struct {
 
 func (c *ircConn) connect() (err error) {
 	args := strings.Split(c.user.password, ":")
-	if len(args) < 2 || (*serverPass != "" && len(args) < 3) {
+	if len(args) < 2 || (*serverPass != "" && len(args) < 3) { // TODO: change this when we add DM support
 		return errors.New("Invalid password (not enough arguments)")
 	}
 

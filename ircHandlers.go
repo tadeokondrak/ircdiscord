@@ -258,11 +258,12 @@ func (c *ircConn) handlePING(m *irc.Message) {
 
 func (c *ircConn) handleNAMES(m *irc.Message) {
 	if len(m.Params) < 1 {
-		// TODO: show names for every channel the user's on
+		c.sendRPL(irc.RPL_ENDOFNAMES, "*", "End of /NAMES list")
 		return
 	}
 	for ircNick := range c.guildSession.userMap.GetSnowflakeMap() {
 		c.sendRPL(irc.RPL_NAMREPLY, "=", m.Params[0], ircNick)
+		c.sendRPL(irc.RPL_ENDOFNAMES, m.Params[0], "End of /NAMES list")
 	}
 }
 

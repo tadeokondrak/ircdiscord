@@ -7,13 +7,12 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"gopkg.in/sorcix/irc.v2"
 )
 
-func replaceMentions(user *ircUser, message *discordgo.Message) (content string) {
+func replaceMentions(user *ircConn, message *discordgo.Message) (content string) {
 	content = message.Content
 	for _, mentionedUser := range message.Mentions {
-		username := user.users.getFromSnowflake(mentionedUser.ID)
+		username := user.guildSession.userMap.GetName(mentionedUser.ID)
 		if username != "" {
 			content = strings.NewReplacer(
 				"<@"+mentionedUser.ID+">", "\x0312\x02@"+username+"\x0f",
@@ -30,18 +29,15 @@ func getTimeFromSnowflake(snowflake string) time.Time {
 	unix = (snowInt >> 22) + 1420070400000
 	return time.Unix(0, int64(unix)*1000000)
 }
-func addRecentlySentMessage(user *ircUser, channelID string, content string) {
-	if user.recentlySentMessages == nil {
-		user.recentlySentMessages = map[string][]string{}
-	}
+func addRecentlySentMessage(user *ircConn, channelID string, content string) {
 	user.recentlySentMessages[channelID] = append(user.recentlySentMessages[channelID], content)
 }
 
-func isRecentlySentMessage(user *ircUser, message *discordgo.Message) bool {
-	if message.Author == nil || user.discordUser == nil {
+func isRecentlySentMessage(user *ircConn, message *discordgo.Message) bool {
+	if message.Author == nil || user.guildSession.self == nil {
 		return false
 	}
-	if user.discordUser.ID != message.Author.ID {
+	if user.guildSession.self.ID != message.Author.ID {
 		return false
 	}
 	if recentlySentMessages, exists := user.recentlySentMessages[message.ChannelID]; exists {
@@ -55,33 +51,30 @@ func isRecentlySentMessage(user *ircUser, message *discordgo.Message) bool {
 	return false
 }
 
-func convertIRCMentionsToDiscord(user *ircUser, message string) (content string) {
+func convertIRCMentionsToDiscord(user *ircConn, message string) (content string) {
 	// TODO: allow chained mentions (`user1: user2: `)
 	startMessageMentionRegex := regexp.MustCompile(`^([^:]+):\ `)
 	matches := startMessageMentionRegex.FindAllStringSubmatchIndex(message, -1)
 	if len(matches) == 0 {
 		return message
 	}
-	discordID := user.users.get(message[matches[0][2]:matches[0][3]])
+	discordID := user.guildSession.userMap.GetSnowflake(message[matches[0][2]:matches[0][3]])
 	if discordID != "" {
 		return "<@" + discordID + "> " + message[matches[0][1]:]
 	}
 	return message
 }
 
-func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message, prefixString string) {
-	ircChannel := user.channels.getFromSnowflake(message.ChannelID)
+func (g *guildSession) sendMessageFromDiscordToIRC(message *discordgo.Message) {}
 
-	if ircChannel == "" || !user.joinedChannels[ircChannel] || isRecentlySentMessage(user, message) || message.Author == nil {
+func sendMessageFromDiscordToIRC(user *ircConn, message *discordgo.Message, prefixString string) {
+	ircChannel := user.guildSession.channelMap.GetName(message.ChannelID)
+
+	if ircChannel == "" || !user.channels[ircChannel] || isRecentlySentMessage(user, message) || message.Author == nil {
 		return
 	}
 
-	nick := user.users.getNick(message.Author)
-	prefix := &irc.Prefix{
-		Name: nick,
-		User: nick,
-		Host: message.Author.ID,
-	}
+	nick := user.guildSession.getNick(message.Author)
 
 	// TODO: check if edited and put (edited) with low contrast
 	discordContent := replaceMentions(user, message)
@@ -89,26 +82,12 @@ func sendMessageFromDiscordToIRC(user *ircUser, message *discordgo.Message, pref
 	content := prefixString + convertDiscordContentToIRC(discordContent, user.session)
 	if content != "" {
 		for _, line := range strings.Split(content, "\n") {
-			user.Encode(&irc.Message{
-				Prefix:  prefix,
-				Command: irc.PRIVMSG,
-				Params: []string{
-					ircChannel,
-					line,
-				},
-			})
+			user.sendPRIVMSG(nick, nick, message.Author.ID, ircChannel, line)
 		}
 	}
 
 	for _, attachment := range message.Attachments {
-		user.Encode(&irc.Message{
-			Prefix:  prefix,
-			Command: irc.PRIVMSG,
-			Params: []string{
-				ircChannel,
-				convertDiscordContentToIRC(attachment.URL, user.session),
-			},
-		})
+		user.sendPRIVMSG(nick, nick, message.Author.ID, ircChannel, convertDiscordContentToIRC(attachment.URL, user.session))
 	}
 }
 
@@ -116,7 +95,7 @@ func isValidDiscordNick(nick string) bool {
 	return true
 }
 
-func convertIRCMessageToDiscord(user *ircUser, ircMessage string) (discordMessage string) {
+func convertIRCMessageToDiscord(user *ircConn, ircMessage string) (discordMessage string) {
 	discordMessage = ircMessage
 	discordMessage = strings.TrimSpace(discordMessage)
 	discordMessage = convertIRCMentionsToDiscord(user, discordMessage)

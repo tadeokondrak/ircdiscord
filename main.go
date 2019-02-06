@@ -3,42 +3,45 @@ package main
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"gopkg.in/sorcix/irc.v2"
 )
 
+const (
+	version = "0.0.0-20190205-1" // TODO: update
+)
+
 var (
+	startTime       = time.Now()
 	discordSessions = map[string]*discordgo.Session{}
-	ircSessions     = map[string]map[string][]*ircUser{} // ircSessions[token][guildid] is a slice of ircUsers
+	guildSessions   = map[string]map[string]*guildSession{}
+	ircSessions     = map[string]map[string][]*ircConn{}
 )
 
 func handleConnection(conn net.Conn) {
 	serverHostname := conn.LocalAddr().(*net.TCPAddr).IP.String()
 	clientHostname := conn.RemoteAddr().(*net.TCPAddr).IP.String()
-	user := &ircUser{
-		nick:     "*",
-		hostname: clientHostname,
-		serverPrefix: &irc.Prefix{
+	c := &ircConn{
+		serverPrefix: irc.Prefix{
 			Name: serverHostname,
 		},
-		clientPrefix: &irc.Prefix{
+		clientPrefix: irc.Prefix{
 			Name: "*",
 			User: "*",
 			Host: clientHostname,
 		},
-		conn:           irc.NewConn(conn),
-		netConn:        conn,
-		channels:       newSnowflakeMap(),
-		users:          newSnowflakeMap(),
-		joinedChannels: map[string]bool{},
+		recentlySentMessages: make(map[string][]string),
+		conn:                 conn,
+		channels:             make(map[string]bool),
 	}
 
 	fmt.Printf("%s connected\n", clientHostname)
 	defer fmt.Printf("%s disconnected\n", clientHostname)
-	defer user.Close()
+	defer c.close()
 	for {
-		message, err := user.Decode()
+		message, err := c.decode()
 		if err != nil { // if connection read failed
 			fmt.Println(err)
 			return
@@ -48,30 +51,51 @@ func handleConnection(conn net.Conn) {
 			continue
 		}
 
-		if user.loggedin {
+		switch message.Command {
+		case irc.PASS:
+			c.handlePASS(message)
+			continue
+		case irc.CAP:
+			continue
+		}
+
+		if c.user.password != "" {
+			switch message.Command {
+			case irc.USER:
+				c.handleUSER(message)
+				continue
+			case irc.NICK:
+				c.handleNICK(message)
+				continue
+			}
+		}
+
+		if c.loggedin {
 			switch message.Command {
 			case irc.NICK:
-				go ircNICK(message, user)
+				go c.handleNICK(message)
+				continue
 			case irc.USER:
-				go ircUSER(message, user)
+				go c.handleUSER(message)
+				continue
 			case irc.PING:
-				go ircPING(message, user)
+				go c.handlePING(message)
+				continue
 			case irc.JOIN:
-				go ircJOIN(message, user)
+				go c.handleJOIN(message)
+				continue
 			case irc.PRIVMSG:
-				go ircPRIVMSG(message, user)
-			case irc.WHOIS:
-				go ircWHOIS(message, user)
+				go c.handlePRIVMSG(message)
+				continue
 			case irc.LIST:
-				go ircLIST(message, user)
+				go c.handleLIST(message)
+				continue
 			case irc.PART:
-				go ircPART(message, user)
+				go c.handlePART(message)
+				continue
 			case irc.NAMES:
-				go ircNAMES(message, user)
-			}
-		} else {
-			if message.Command == irc.PASS {
-				ircPASS(message, user)
+				go c.handleNAMES(message)
+				continue
 			}
 		}
 	}

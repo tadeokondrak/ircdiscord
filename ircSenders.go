@@ -114,7 +114,7 @@ func (c *ircConn) sendPONG(message string) (err error) {
 func (c *ircConn) sendPRIVMSG(date time.Time, nick string, realname string, hostname string, target string, content string) (err error) {
 	var tags irc.Tags
 	if c.user.supportedCapabilities["server-time"] {
-		tags := irc.Tags{}
+		tags = irc.Tags{}
 		tags["time"] = date.Format("2006-01-02T15:04:05.000Z")
 	}
 

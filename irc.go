@@ -227,6 +227,17 @@ type ircConn struct {
 
 func (c *ircConn) connect() (err error) {
 	args := strings.Split(c.user.password, ":")
+	if len(args) < 2 || (*serverPass != "" && len(args) < 3) {
+		return errors.New("Invalid password (not enough arguments)")
+	}
+
+	if *serverPass != "" {
+		if args[0] != *serverPass {
+			return errors.New("Invalid password (incorrect server password)")
+		}
+		args = args[1:]
+	}
+
 	token := args[0]
 
 	var guildID string

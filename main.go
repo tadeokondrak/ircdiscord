@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	version = "0.0.0-20190205-6" // TODO: update
+	version = "0.0.0-20190205-7" // TODO: update
 )
 
 var (
@@ -108,6 +108,10 @@ func handleConnection(conn net.Conn) {
 		}
 	}
 }
+
+var (
+	serverPass = flag.String("serverpassword", "", "Server password that must also be specified when logging in.")
+)
 
 func main() {
 	tlsEnabled := flag.Bool("tls", false, "Enable TLS encrypted connections.")

@@ -4,7 +4,7 @@ github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/gorilla/websocket v1.4.0 h1:WDFjx/TMzVgy9VdMMQi2K2Emtwi2QcUQsztZ/zLaH/Q=
 github.com/gorilla/websocket v1.4.0/go.mod h1:E7qHFY5m1UJ88s3WnNqhKjPHQ0heANvMoAMk2YaljkQ=
-github.com/tadeokondrak/irc v0.0.0-20190206155200-c0ba4aa2dc52 h1:JNjUkp72B8C4KXMEEcZnhFAUnkdPLEjaJ9x6dYl6iCA=
-github.com/tadeokondrak/irc v0.0.0-20190206155200-c0ba4aa2dc52/go.mod h1:E8ieLlz8Unc8FO7BU1QuUH/wuujthMqFWfpv6mMm2OQ=
+github.com/tadeokondrak/irc v0.0.0-20190206220122-0b0ea71e5b7a h1:Ljh/6eBWiPz4mZZvZ4Ac20IMyhi6/h8zGlgp7kL+Zdk=
+github.com/tadeokondrak/irc v0.0.0-20190206220122-0b0ea71e5b7a/go.mod h1:E8ieLlz8Unc8FO7BU1QuUH/wuujthMqFWfpv6mMm2OQ=
 golang.org/x/crypto v0.0.0-20181030102418-4d3f4d9ffa16 h1:y6ce7gCWtnH+m3dCjzQ1PCuwl28DDIc3VNnvY29DlIA=
 golang.org/x/crypto v0.0.0-20181030102418-4d3f4d9ffa16/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=

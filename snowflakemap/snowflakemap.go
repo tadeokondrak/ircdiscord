@@ -29,7 +29,7 @@ import (
 
 // SnowflakeMap is a bidirectional map from a string to a discord snowflake (also a string)
 type SnowflakeMap struct {
-	sync.Mutex
+	mu         sync.Mutex
 	separator  string
 	names      map[string]string // map[snowflake]name
 	snowflakes map[string]string // map[name]snowflake
@@ -46,8 +46,8 @@ func NewSnowflakeMap(separator string) *SnowflakeMap {
 
 // Add adds a snowflake from a name and snowflake
 func (m *SnowflakeMap) Add(name string, snowflake string) string {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	var suffix string
 	for i := 0; ; i++ {
 		if i == 0 {
@@ -70,8 +70,8 @@ func (m *SnowflakeMap) Add(name string, snowflake string) string {
 
 // GetName returns a name from a snowflake
 func (m *SnowflakeMap) GetName(snowflake string) string {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	snowflake, exists := m.names[snowflake]
 	if exists {
 		return snowflake
@@ -81,15 +81,15 @@ func (m *SnowflakeMap) GetName(snowflake string) string {
 
 // GetNameMap returns a map of names to snowflakes
 func (m *SnowflakeMap) GetNameMap() map[string]string {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.names
 }
 
 // GetSnowflake returns a snowflake from a name
 func (m *SnowflakeMap) GetSnowflake(name string) string {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	name, exists := m.snowflakes[name]
 	if exists {
 		return name
@@ -99,15 +99,15 @@ func (m *SnowflakeMap) GetSnowflake(name string) string {
 
 // GetSnowflakeMap returns a map of snowflakes to names
 func (m *SnowflakeMap) GetSnowflakeMap() map[string]string {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.snowflakes
 }
 
 // RemoveName removes an entry corresponding to a name
 func (m *SnowflakeMap) RemoveName(name string) {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if snowflake, exists := m.snowflakes[name]; exists {
 		delete(m.names, snowflake)
 		delete(m.snowflakes, name)
@@ -116,8 +116,8 @@ func (m *SnowflakeMap) RemoveName(name string) {
 
 // RemoveSnowflake removes an entry corresponding to a snowflake
 func (m *SnowflakeMap) RemoveSnowflake(snowflake string) {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if name, exists := m.names[snowflake]; exists {
 		delete(m.names, snowflake)
 		delete(m.snowflakes, name)
@@ -126,7 +126,7 @@ func (m *SnowflakeMap) RemoveSnowflake(snowflake string) {
 
 // Length returns the length of the SnowflakeMap
 func (m *SnowflakeMap) Length() int {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return len(m.names)
 }

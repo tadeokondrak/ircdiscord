@@ -481,8 +481,9 @@ func (c *ircConn) sendPONG(message string) (err error) {
 }
 
 func (c *ircConn) sendPRIVMSG(date time.Time, nick string, realname string, hostname string, target string, content string) (err error) {
-	tags := irc.Tags{}
+	var tags irc.Tags
 	if c.user.supportedCapabilities["server-time"] {
+		tags := irc.Tags{}
 		tags["time"] = date.Format("2006-01-02T15:04:05.000Z")
 	}
 
@@ -496,12 +497,20 @@ func (c *ircConn) sendPRIVMSG(date time.Time, nick string, realname string, host
 			Host: hostname,
 		}
 	}
-	err = c.encode(&irc.Message{
-		Tags:    &tags,
-		Prefix:  prefix,
-		Command: irc.PRIVMSG,
-		Params:  []string{target, content},
-	})
+	if tags == nil {
+		err = c.encode(&irc.Message{
+			Prefix:  prefix,
+			Command: irc.PRIVMSG,
+			Params:  []string{target, content},
+		})
+	} else {
+		err = c.encode(&irc.Message{
+			Tags:    &tags,
+			Prefix:  prefix,
+			Command: irc.PRIVMSG,
+			Params:  []string{target, content},
+		})
+	}
 	return
 }
 

@@ -271,8 +271,6 @@ func (c *ircConn) connect() (err error) {
 		Host: c.self.ID,
 	}
 
-	print("here")
-
 	return
 }
 

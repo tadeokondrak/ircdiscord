@@ -20,10 +20,12 @@ const (
 
 var (
 	startTime             = time.Now()
-	supportedCapabilities = []string{}
-	discordSessions       = map[string]*discordgo.Session{}
-	guildSessions         = map[string]map[string]*guildSession{}
-	ircSessions           = map[string]map[string][]*ircConn{}
+	supportedCapabilities = []string{
+		"server-time",
+	}
+	discordSessions = map[string]*discordgo.Session{}
+	guildSessions   = map[string]map[string]*guildSession{}
+	ircSessions     = map[string]map[string][]*ircConn{}
 )
 
 func handleConnection(conn net.Conn) {

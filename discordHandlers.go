@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/dustin/go-humanize"
 )
@@ -50,7 +52,7 @@ func messageDelete(session *discordgo.Session, message *discordgo.MessageDelete)
 		if conn == nil {
 			continue
 		}
-		conn.sendPRIVMSG("", "", "",
+		conn.sendPRIVMSG(time.Now(), "", "", "",
 			conn.guildSession.channelMap.GetName(message.ChannelID),
 			"\x0304message sent \x0f\x02"+humanize.Time(getTimeFromSnowflake(message.ID))+"\x0f \x0304in this channel was deleted",
 		)

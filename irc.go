@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dustin/go-humanize"
 
@@ -479,7 +480,12 @@ func (c *ircConn) sendPONG(message string) (err error) {
 	return
 }
 
-func (c *ircConn) sendPRIVMSG(nick string, realname string, hostname string, target string, content string) (err error) {
+func (c *ircConn) sendPRIVMSG(date time.Time, nick string, realname string, hostname string, target string, content string) (err error) {
+	tags := irc.Tags{}
+	if c.user.supportedCapabilities["server-time"] {
+		tags["time"] = date.Format("2006-01-02T15:04:05.000Z")
+	}
+
 	var prefix *irc.Prefix
 	if nick == "" || realname == "" || hostname == "" {
 		prefix = &c.serverPrefix
@@ -491,6 +497,7 @@ func (c *ircConn) sendPRIVMSG(nick string, realname string, hostname string, tar
 		}
 	}
 	err = c.encode(&irc.Message{
+		Tags:    &tags,
 		Prefix:  prefix,
 		Command: irc.PRIVMSG,
 		Params:  []string{target, content},

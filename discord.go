@@ -78,16 +78,26 @@ func sendMessageFromDiscordToIRC(user *ircConn, message *discordgo.Message, pref
 
 	// TODO: check if edited and put (edited) with low contrast
 	discordContent := replaceMentions(user, message)
+	var date time.Time
+	var err error
+	if message.EditedTimestamp != "" {
+		date, err = message.EditedTimestamp.Parse()
+	} else {
+		date, err = message.Timestamp.Parse()
+	}
+	if err != nil {
+		return
+	}
 
 	content := prefixString + convertDiscordContentToIRC(discordContent, user.session)
 	if content != "" {
 		for _, line := range strings.Split(content, "\n") {
-			user.sendPRIVMSG(nick, nick, message.Author.ID, ircChannel, line)
+			user.sendPRIVMSG(date, nick, nick, message.Author.ID, ircChannel, line)
 		}
 	}
 
 	for _, attachment := range message.Attachments {
-		user.sendPRIVMSG(nick, nick, message.Author.ID, ircChannel, convertDiscordContentToIRC(attachment.URL, user.session))
+		user.sendPRIVMSG(date, nick, nick, message.Author.ID, ircChannel, convertDiscordContentToIRC(attachment.URL, user.session))
 	}
 }
 

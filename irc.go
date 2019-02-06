@@ -201,10 +201,13 @@ func (g *guildSession) getNick(discordUser *discordgo.User) (nick string) {
 }
 
 type ircUser struct {
-	nick     string
-	username string
-	realname string
-	password string
+	nick                  string
+	username              string
+	realname              string
+	password              string
+	capBlocked            bool
+	supportsCap302        bool
+	supportedCapabilities map[string]bool
 }
 
 type ircConn struct {
@@ -218,6 +221,7 @@ type ircConn struct {
 	recentlySentMessages map[string][]string
 	conn                 net.Conn
 	user                 ircUser
+	reader               *bufio.Reader
 	sync.Mutex
 }
 
@@ -247,7 +251,7 @@ func (c *ircConn) connect() (err error) {
 		var err error
 		guildSession, err = newGuildSession(token, guildID)
 		if err != nil {
-			if guildSession.session != nil {
+			if guildSession != nil && guildSession.session != nil {
 				guildSession.session.Close()
 			}
 			c.sendNOTICE("Failed to connect to Discord. Check if your token is correct")
@@ -266,7 +270,7 @@ func (c *ircConn) connect() (err error) {
 	c.loggedin = true
 
 	c.clientPrefix = irc.Prefix{
-		Name: c.guildSession.getNick(c.self),
+		Name: c.getNick(c.self),
 		User: convertDiscordUsernameToIRCRealname(c.self.Username),
 		Host: c.self.ID,
 	}
@@ -282,7 +286,7 @@ func (c *ircConn) register() (err error) {
 		return
 	}
 
-	nick := c.guildSession.getNick(c.guildSession.self)
+	nick := c.getNick(c.self)
 
 	if nick == "" {
 		c.sendNOTICE("something with discord failed, we couldn't get a nick")
@@ -312,7 +316,7 @@ func (c *ircConn) register() (err error) {
 }
 
 func (c *ircConn) readyToRegister() bool {
-	if c.user.nick != "" && c.user.username != "" && c.user.realname != "" {
+	if c.user.nick != "" && c.user.username != "" && c.user.realname != "" && c.user.password != "" && !c.user.capBlocked {
 		return true
 	}
 	return false
@@ -337,7 +341,7 @@ func (c *ircConn) close() (err error) {
 }
 
 func (c *ircConn) decode() (message *irc.Message, err error) {
-	netData, err := bufio.NewReader(c.conn).ReadString('\n')
+	netData, err := c.reader.ReadString('\n')
 	message = irc.ParseMessage(netData)
 	if message != nil {
 		fmt.Println(message)
@@ -463,6 +467,7 @@ func (c *ircConn) sendPONG(message string) (err error) {
 	})
 	return
 }
+
 func (c *ircConn) sendPRIVMSG(nick string, realname string, hostname string, target string, content string) (err error) {
 	var prefix *irc.Prefix
 	if nick == "" || realname == "" || hostname == "" {
@@ -478,6 +483,15 @@ func (c *ircConn) sendPRIVMSG(nick string, realname string, hostname string, tar
 		Prefix:  prefix,
 		Command: irc.PRIVMSG,
 		Params:  []string{target, content},
+	})
+	return
+}
+
+func (c *ircConn) sendCAP(subcommand string, params ...string) (err error) {
+	err = c.encode(&irc.Message{
+		Prefix:  &c.serverPrefix,
+		Command: irc.CAP,
+		Params:  append([]string{c.user.nick, subcommand}, params...),
 	})
 	return
 }

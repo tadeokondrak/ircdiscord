@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"time"
@@ -10,14 +11,15 @@ import (
 )
 
 const (
-	version = "0.0.0-20190205-1" // TODO: update
+	version = "0.0.0-20190205-3" // TODO: update
 )
 
 var (
-	startTime       = time.Now()
-	discordSessions = map[string]*discordgo.Session{}
-	guildSessions   = map[string]map[string]*guildSession{}
-	ircSessions     = map[string]map[string][]*ircConn{}
+	startTime             = time.Now()
+	supportedCapabilities = []string{}
+	discordSessions       = map[string]*discordgo.Session{}
+	guildSessions         = map[string]map[string]*guildSession{}
+	ircSessions           = map[string]map[string][]*ircConn{}
 )
 
 func handleConnection(conn net.Conn) {
@@ -35,6 +37,12 @@ func handleConnection(conn net.Conn) {
 		recentlySentMessages: make(map[string][]string),
 		conn:                 conn,
 		channels:             make(map[string]bool),
+		user: ircUser{
+			nick:                  "*",
+			username:              "*",
+			supportedCapabilities: make(map[string]bool),
+		},
+		reader: bufio.NewReader(conn),
 	}
 
 	fmt.Printf("%s connected\n", clientHostname)
@@ -56,18 +64,14 @@ func handleConnection(conn net.Conn) {
 			c.handlePASS(message)
 			continue
 		case irc.CAP:
+			c.handleCAP(message)
 			continue
-		}
-
-		if c.user.password != "" {
-			switch message.Command {
-			case irc.USER:
-				c.handleUSER(message)
-				continue
-			case irc.NICK:
-				c.handleNICK(message)
-				continue
-			}
+		case irc.USER:
+			c.handleUSER(message)
+			continue
+		case irc.NICK:
+			c.handleNICK(message)
+			continue
 		}
 
 		if c.loggedin {

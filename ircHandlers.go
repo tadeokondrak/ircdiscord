@@ -9,6 +9,67 @@ import (
 	"gopkg.in/sorcix/irc.v2"
 )
 
+func (c *ircConn) handleCAP(m *irc.Message) {
+	const ERR_INVALIDCAPCMD = "410"
+	if len(m.Params) < 1 {
+		c.sendERR(irc.ERR_NEEDMOREPARAMS, irc.JOIN, "Not enough parameters")
+		return
+	}
+	if len(m.Params) > 1 && m.Params[1] == "302" {
+		c.user.supportsCap302 = true
+	}
+	switch m.Params[0] {
+	case irc.CAP_LS:
+		c.user.capBlocked = true
+		c.sendCAP(irc.CAP_LS, strings.Join(supportedCapabilities, " "))
+	case irc.CAP_LIST:
+		supportedCaps := []string{}
+		for key := range c.user.supportedCapabilities {
+			supportedCaps = append(supportedCaps, key)
+		}
+		c.sendCAP(irc.CAP_LIST, strings.Join(supportedCaps, " "))
+	case irc.CAP_REQ:
+		if len(m.Params) < 2 {
+			c.sendERR(ERR_INVALIDCAPCMD, irc.CAP_REQ, "Not enough parameters")
+			return
+		}
+		caps := strings.Split(m.Params[1], " ")
+		success := true
+		approvedCaps := []string{}
+		for _, cap := range caps {
+			approvedCaps = append(approvedCaps, cap)
+			if cap == "" || strings.HasPrefix(cap, "-") {
+				continue
+			}
+			for _, supportedCap := range supportedCapabilities {
+				if cap == supportedCap {
+					goto end // this would be a continue if this weren't a nested loop
+				}
+			}
+			success = false
+		end:
+		}
+		if success {
+			for _, cap := range approvedCaps {
+				if strings.HasPrefix(cap, "-") {
+					c.user.supportedCapabilities[cap[1:]] = false
+				} else {
+					c.user.supportedCapabilities[cap] = true
+				}
+			}
+			c.sendCAP(irc.CAP_ACK, strings.Join(approvedCaps, " "))
+		} else {
+			c.sendCAP(irc.CAP_NAK, strings.Join(approvedCaps, " "))
+		}
+	case irc.CAP_END:
+		c.user.capBlocked = false
+		if c.readyToRegister() {
+			c.register()
+		}
+	}
+	return
+}
+
 func (c *ircConn) handleMOTD() {
 	c.sendERR(irc.ERR_NOMOTD, "MOTD file is missing")
 }
@@ -68,6 +129,10 @@ func (c *ircConn) handlePASS(m *irc.Message) {
 	}
 
 	c.user.password = m.Params[0]
+
+	if c.readyToRegister() {
+		c.register()
+	}
 }
 
 func (c *ircConn) handleTOPIC(m *irc.Message) {

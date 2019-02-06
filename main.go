@@ -22,6 +22,7 @@ var (
 	startTime             = time.Now()
 	supportedCapabilities = []string{
 		"server-time",
+		"batch",
 	}
 	discordSessions = map[string]*discordgo.Session{}
 	guildSessions   = map[string]map[string]*guildSession{}

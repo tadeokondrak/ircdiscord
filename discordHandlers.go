@@ -5,6 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dustin/go-humanize"
+	"github.com/tadeokondrak/irc"
 )
 
 // is there a better way?
@@ -26,7 +27,7 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 		if conn == nil {
 			continue
 		}
-		sendMessageFromDiscordToIRC(conn, message.Message, "")
+		sendMessageFromDiscordToIRC(conn, message.Message, "", "")
 	}
 }
 
@@ -39,7 +40,7 @@ func messageUpdate(session *discordgo.Session, message *discordgo.MessageUpdate)
 		if conn == nil {
 			continue
 		}
-		sendMessageFromDiscordToIRC(conn, message.Message, "\x0308message sent \x0f\x02"+humanize.Time(getTimeFromSnowflake(message.ID))+"\x0f \x0308edited to:\n")
+		sendMessageFromDiscordToIRC(conn, message.Message, "\x0308message sent \x0f\x02"+humanize.Time(getTimeFromSnowflake(message.ID))+"\x0f \x0308edited to:\n", "")
 	}
 }
 
@@ -52,7 +53,10 @@ func messageDelete(session *discordgo.Session, message *discordgo.MessageDelete)
 		if conn == nil {
 			continue
 		}
-		conn.sendPRIVMSG(time.Now(), "", "", "",
+		tags := irc.Tags{
+			"time": time.Now().Format("2006-01-02T15:04:05.000Z"),
+		}
+		conn.sendPRIVMSG(tags, "", "", "",
 			conn.guildSession.channelMap.GetName(message.ChannelID),
 			"\x0304message sent \x0f\x02"+humanize.Time(getTimeFromSnowflake(message.ID))+"\x0f \x0304in this channel was deleted",
 		)

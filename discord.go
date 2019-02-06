@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/tadeokondrak/irc"
 )
 
 func replaceMentions(user *ircConn, message *discordgo.Message) (content string) {
@@ -67,17 +68,13 @@ func convertIRCMentionsToDiscord(user *ircConn, message string) (content string)
 
 func (g *guildSession) sendMessageFromDiscordToIRC(message *discordgo.Message) {}
 
-func sendMessageFromDiscordToIRC(user *ircConn, message *discordgo.Message, prefixString string) {
+func sendMessageFromDiscordToIRC(user *ircConn, message *discordgo.Message, prefixString string, batchTag string) {
 	ircChannel := user.guildSession.channelMap.GetName(message.ChannelID)
 
 	if ircChannel == "" || !user.channels[ircChannel] || isRecentlySentMessage(user, message) || message.Author == nil {
 		return
 	}
 
-	nick := user.guildSession.getNick(message.Author)
-
-	// TODO: check if edited and put (edited) with low contrast
-	discordContent := replaceMentions(user, message)
 	var date time.Time
 	var err error
 	if message.EditedTimestamp != "" {
@@ -89,15 +86,28 @@ func sendMessageFromDiscordToIRC(user *ircConn, message *discordgo.Message, pref
 		return
 	}
 
+	tags := irc.Tags{
+		"time": date.Format("2006-01-02T15:04:05.000Z"),
+	}
+
+	if batchTag != "" {
+		tags["batch"] = batchTag
+	}
+
+	nick := user.guildSession.getNick(message.Author)
+
+	// TODO: check if edited and put (edited) with low contrast
+	discordContent := replaceMentions(user, message)
+
 	content := prefixString + convertDiscordContentToIRC(discordContent, user.session)
 	if content != "" {
 		for _, line := range strings.Split(content, "\n") {
-			user.sendPRIVMSG(date, nick, nick, message.Author.ID, ircChannel, line)
+			user.sendPRIVMSG(tags, nick, nick, message.Author.ID, ircChannel, line)
 		}
 	}
 
 	for _, attachment := range message.Attachments {
-		user.sendPRIVMSG(date, nick, nick, message.Author.ID, ircChannel, convertDiscordContentToIRC(attachment.URL, user.session))
+		user.sendPRIVMSG(tags, nick, nick, message.Author.ID, ircChannel, convertDiscordContentToIRC(attachment.URL, user.session))
 	}
 }
 

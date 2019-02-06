@@ -1,8 +1,6 @@
 package main
 
 import (
-	"time"
-
 	"github.com/tadeokondrak/irc"
 )
 
@@ -111,11 +109,16 @@ func (c *ircConn) sendPONG(message string) (err error) {
 	return
 }
 
-func (c *ircConn) sendPRIVMSG(date time.Time, nick string, realname string, hostname string, target string, content string) (err error) {
-	var tags irc.Tags
-	if c.user.supportedCapabilities["server-time"] {
-		tags = irc.Tags{}
-		tags["time"] = date.Format("2006-01-02T15:04:05.000Z")
+func (c *ircConn) sendPRIVMSG(tags irc.Tags, nick string, realname string, hostname string, target string, content string) (err error) {
+	_tags := irc.Tags{}
+
+	// TODO: clean up
+	if c.user.supportedCapabilities["server-time"] && tags["time"] != "" {
+		_tags["time"] = tags["time"]
+	}
+
+	if c.user.supportedCapabilities["batch"] && tags["batch"] != "" {
+		_tags["batch"] = tags["batch"]
 	}
 
 	var prefix *irc.Prefix
@@ -128,7 +131,7 @@ func (c *ircConn) sendPRIVMSG(date time.Time, nick string, realname string, host
 			Host: hostname,
 		}
 	}
-	if tags == nil {
+	if len(_tags) == 0 {
 		err = c.encode(&irc.Message{
 			Prefix:  prefix,
 			Command: irc.PRIVMSG,
@@ -136,7 +139,7 @@ func (c *ircConn) sendPRIVMSG(date time.Time, nick string, realname string, host
 		})
 	} else {
 		err = c.encode(&irc.Message{
-			Tags:    &tags,
+			Tags:    &_tags,
 			Prefix:  prefix,
 			Command: irc.PRIVMSG,
 			Params:  []string{target, content},
@@ -150,6 +153,21 @@ func (c *ircConn) sendCAP(subcommand string, params ...string) (err error) {
 		Prefix:  &c.serverPrefix,
 		Command: irc.CAP,
 		Params:  append([]string{c.user.nick, subcommand}, params...),
+	})
+	return
+}
+
+func (c *ircConn) sendBATCH(start bool, tag string, params ...string) (err error) {
+	BATCH := "BATCH" // TODO: put in irc lib fork
+	prefix := "+"
+	if !start {
+		prefix = "-"
+	}
+
+	err = c.encode(&irc.Message{
+		Prefix:  &c.serverPrefix,
+		Command: BATCH,
+		Params:  append([]string{prefix + tag}, params...),
 	})
 	return
 }

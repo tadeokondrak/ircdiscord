@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/google/uuid"
 	"github.com/tadeokondrak/irc"
 )
 
@@ -197,15 +198,25 @@ func (c *ircConn) handleJOIN(m *irc.Message) {
 			Params:  []string{channelName},
 		})
 
-		go func(user *ircConn, channel *discordgo.Channel) {
-			messages, err := user.session.ChannelMessages(channel.ID, 100, "", "", "")
+		go func(c *ircConn, channel *discordgo.Channel) {
+			messages, err := c.session.ChannelMessages(channel.ID, 100, "", "", "")
 			if err != nil {
-				user.sendNOTICE("There was an error getting messages from Discord.")
+				c.sendNOTICE("There was an error getting messages from Discord.")
 				return
 			}
-			for i := len(messages); i != 0; i-- { // Discord sends them in reverse order
-				sendMessageFromDiscordToIRC(user, messages[i-1], "") // TODO: maybe prefix with date
+
+			channelName := c.guildSession.channelMap.GetName(channel.ID)
+			if channelName == "" {
+				c.sendNOTICE("This shouldn't happen. If you see this, report it as a bug.")
+				return
 			}
+
+			tag := uuid.New().String()
+			c.sendBATCH(true, tag, "chathistory", channelName)
+			for i := len(messages); i != 0; i-- { // Discord sends them in reverse order
+				sendMessageFromDiscordToIRC(c, messages[i-1], "", tag) // TODO: maybe prefix with date
+			}
+			c.sendBATCH(false, tag)
 		}(c, discordChannel)
 		go c.handleNAMES(&irc.Message{Command: irc.NAMES, Params: []string{channelName}})
 	}

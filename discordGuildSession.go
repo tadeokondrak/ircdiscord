@@ -189,7 +189,7 @@ func (g *guildSession) addChannel(channel *discordgo.Channel) (name string) {
 			name = g.getNick(channel.Recipients[0])
 		} else {
 			for _, user := range channel.Recipients {
-				name = name + g.getNick(user) + "#"
+				name = name + g.getNick(user) + "&"
 			}
 			name = convertDiscordChannelNameToIRC(name[:len(name)-1])
 		}

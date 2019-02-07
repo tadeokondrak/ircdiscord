@@ -8,7 +8,7 @@ import (
 )
 
 func convertDiscordChannelNameToIRC(discordName string) (IRCName string) {
-	re := regexp.MustCompile(`[^a-zA-Z0-9\-_#]+`)
+	re := regexp.MustCompile(`[^a-zA-Z0-9\-_#&]+`)
 	cleaned := re.ReplaceAllString(discordName, "")
 	IRCName = truncate("#"+cleaned, 50)
 

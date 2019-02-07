@@ -5,7 +5,6 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/dustin/go-humanize"
-	"github.com/tadeokondrak/irc"
 )
 
 // is there a better way?
@@ -19,6 +18,9 @@ func addHandlers(s *discordgo.Session) {
 	s.AddHandler(guildRoleCreate)
 	s.AddHandler(guildRoleDelete)
 	s.AddHandler(guildRoleUpdate)
+	s.AddHandler(guildMemberAdd)
+	s.AddHandler(guildMemberRemove)
+	s.AddHandler(guildMemberUpdate)
 }
 
 func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
@@ -26,12 +28,18 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 	if !exists {
 		return
 	}
+	guildSession.addMessage(message.Message)
 	for _, conn := range guildSession.conns {
 		if conn == nil {
 			continue
 		}
-		sendMessageFromDiscordToIRC(conn, message.Message, "", "")
+		date, err := message.Message.Timestamp.Parse()
+		if err != nil {
+			return
+		}
+		sendMessageFromDiscordToIRC(date, conn, message.Message, "", "")
 	}
+	guildSession.lastAck, _ = guildSession.session.ChannelMessageAck(message.ChannelID, message.ID, guildSession.lastAck.Token)
 }
 
 func messageUpdate(session *discordgo.Session, message *discordgo.MessageUpdate) {
@@ -39,12 +47,22 @@ func messageUpdate(session *discordgo.Session, message *discordgo.MessageUpdate)
 	if !exists {
 		return
 	}
+	oldMessage, err := guildSession.getMessage(message.ChannelID, message.ID)
+	if err != nil {
+		return
+	}
 	for _, conn := range guildSession.conns {
 		if conn == nil {
 			continue
 		}
-		sendMessageFromDiscordToIRC(conn, message.Message, "\x0308message sent \x0f\x02"+humanize.Time(getTimeFromSnowflake(message.ID))+"\x0f \x0308edited to:\n", "")
+		date, err := message.Timestamp.Parse()
+		if err != nil {
+			return
+		}
+		sendMessageFromDiscordToIRC(date, conn, oldMessage, "\x0308message sent \x0f\x02"+humanize.Time(getTimeFromSnowflake(message.ID))+"\x0f:\n", "")
+		sendMessageFromDiscordToIRC(date, conn, message.Message, "\x0308was edited to:\n", "")
 	}
+	guildSession.addMessage(message.Message)
 }
 
 func messageDelete(session *discordgo.Session, message *discordgo.MessageDelete) {
@@ -53,16 +71,15 @@ func messageDelete(session *discordgo.Session, message *discordgo.MessageDelete)
 		return
 	}
 	for _, conn := range guildSession.conns {
+
 		if conn == nil {
 			continue
 		}
-		tags := irc.Tags{
-			"time": time.Now().Format("2006-01-02T15:04:05.000Z"),
+		oldMessage, err := guildSession.getMessage(message.ChannelID, message.ID)
+		if err != nil {
+			return
 		}
-		conn.sendPRIVMSG(tags, "", "", "",
-			conn.guildSession.channelMap.GetName(message.ChannelID),
-			"\x0304message sent \x0f\x02"+humanize.Time(getTimeFromSnowflake(message.ID))+"\x0f \x0304in this channel was deleted",
-		)
+		sendMessageFromDiscordToIRC(time.Now(), conn, oldMessage, "\x0304message sent \x0f\x02"+humanize.Time(getTimeFromSnowflake(message.ID))+"\x0f \x0304in this channel was deleted:\n", "")
 		return
 	}
 }
@@ -116,4 +133,44 @@ func guildRoleUpdate(session *discordgo.Session, role *discordgo.GuildRoleUpdate
 		return
 	}
 	guildSession.updateRole(role.Role)
+}
+
+func guildMemberAdd(session *discordgo.Session, member *discordgo.GuildMemberAdd) {
+	guildSession, exists := guildSessions[session.Token][member.GuildID]
+	if !exists {
+		return
+	}
+	guildSession.addMember(member.Member)
+	for _, conn := range guildSession.conns {
+		if conn == nil {
+			continue
+		}
+		for ircChannel := range conn.channels {
+			conn.sendJOIN(
+				conn.getNick(member.User),
+				convertDiscordUsernameToIRCRealname(member.Member.User.Username),
+				member.Member.User.ID,
+				ircChannel,
+			)
+		}
+		return
+	}
+}
+
+func guildMemberUpdate(session *discordgo.Session, member *discordgo.GuildMemberUpdate) {
+	guildSession, exists := guildSessions[session.Token][member.GuildID]
+	if !exists {
+		return
+	}
+	guildSession.updateMember(member.Member)
+	// TODO: handle nick changes? handle role changes?
+}
+
+func guildMemberRemove(session *discordgo.Session, member *discordgo.GuildMemberRemove) {
+	guildSession, exists := guildSessions[session.Token][member.GuildID]
+	if !exists {
+		return
+	}
+	guildSession.removeMember(member.Member)
+	// TODO: send part like guildMemberAdd
 }

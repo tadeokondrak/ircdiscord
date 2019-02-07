@@ -196,7 +196,7 @@ func (c *ircConn) handleJOIN(m *irc.Message) {
 		c.guildSession.channels[discordChannelID] = discordChannel
 		c.channels[channelName] = true
 
-		c.sendJOIN("", "", "", channelName, "")
+		c.sendJOIN("", "", "", channelName)
 
 		c.handleTOPIC(&irc.Message{
 			Command: irc.TOPIC,
@@ -221,7 +221,11 @@ func (c *ircConn) handleJOIN(m *irc.Message) {
 				c.sendBATCH(true, tag, "chathistory", channelName)
 			}
 			for i := len(messages); i != 0; i-- { // Discord sends them in reverse order
-				sendMessageFromDiscordToIRC(c, messages[i-1], "", tag) // TODO: maybe prefix with date
+				date, err := messages[i-1].Timestamp.Parse()
+				if err != nil {
+					continue
+				}
+				sendMessageFromDiscordToIRC(date, c, messages[i-1], "", tag)
 			}
 			if c.user.supportedCapabilities["batch"] {
 				c.sendBATCH(false, tag)

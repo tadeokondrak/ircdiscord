@@ -30,7 +30,7 @@ func (c *ircConn) sendRPL(command string, params ...string) (err error) {
 	return
 }
 
-func (c *ircConn) sendJOIN(nick string, realname string, hostname string, target string, key string) (err error) {
+func (c *ircConn) sendJOIN(nick string, realname string, hostname string, target string) (err error) {
 	var prefix *irc.Prefix
 	if nick == "" || realname == "" || hostname == "" {
 		prefix = &c.clientPrefix
@@ -41,14 +41,10 @@ func (c *ircConn) sendJOIN(nick string, realname string, hostname string, target
 			Host: hostname,
 		}
 	}
-	params := []string{target}
-	if key != "" {
-		params = append(params, key)
-	}
 	err = c.encode(&irc.Message{
 		Prefix:  prefix,
 		Command: irc.JOIN,
-		Params:  params,
+		Params:  []string{target},
 	})
 	return
 }

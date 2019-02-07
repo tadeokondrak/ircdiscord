@@ -54,21 +54,10 @@ func convertIRCMentionsToDiscord(user *ircConn, message string) (content string)
 
 func (g *guildSession) sendMessageFromDiscordToIRC(message *discordgo.Message) {}
 
-func sendMessageFromDiscordToIRC(user *ircConn, message *discordgo.Message, prefixString string, batchTag string) {
+func sendMessageFromDiscordToIRC(date time.Time, user *ircConn, message *discordgo.Message, prefixString string, batchTag string) {
 	ircChannel := user.guildSession.channelMap.GetName(message.ChannelID)
 
 	if ircChannel == "" || !user.channels[ircChannel] || isRecentlySentMessage(user, message) || message.Author == nil {
-		return
-	}
-
-	var date time.Time
-	var err error
-	if message.EditedTimestamp != "" {
-		date, err = message.EditedTimestamp.Parse()
-	} else {
-		date, err = message.Timestamp.Parse()
-	}
-	if err != nil {
 		return
 	}
 

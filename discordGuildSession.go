@@ -23,6 +23,8 @@ type guildSession struct {
 	channels   map[string]*discordgo.Channel // map[channelid]Channel
 	members    map[string]*discordgo.Member
 	roles      map[string]*discordgo.Role
+	messages   map[string]*discordgo.Message
+	lastAck    *discordgo.Ack
 	conns      []*ircConn
 }
 
@@ -78,6 +80,8 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 		channels:         make(map[string]*discordgo.Channel),
 		members:          make(map[string]*discordgo.Member),
 		roles:            make(map[string]*discordgo.Role),
+		messages:         make(map[string]*discordgo.Message),
+		lastAck:          &discordgo.Ack{},
 		conns:            []*ircConn{},
 	}
 
@@ -193,6 +197,37 @@ func (g *guildSession) removeRole(roleID string) {
 func (g *guildSession) addMember(member *discordgo.Member) (name string) {
 	g.members[member.User.ID] = member
 	return g.userMap.Add(convertDiscordUsernameToIRCNick(member.User.Username), member.User.ID)
+}
+
+func (g *guildSession) updateMember(member *discordgo.Member) {
+	g.members[member.User.ID] = member
+}
+
+func (g *guildSession) removeMember(member *discordgo.Member) {
+	g.userMap.RemoveSnowflake(member.User.ID)
+}
+
+func (g *guildSession) addMessage(message *discordgo.Message) {
+	g.messages[message.ID] = message
+}
+
+func (g *guildSession) updateMessage(message *discordgo.Message) {
+	g.addMessage(message)
+}
+
+func (g *guildSession) getMessage(channelID string, messageID string) (message *discordgo.Message, err error) {
+	message, exists := g.messages[messageID]
+	if exists {
+		return
+	}
+
+	message, err = g.session.ChannelMessage(g.guild.ID, messageID)
+	if err != nil {
+		return nil, err
+	}
+
+	g.messages[messageID] = message
+	return
 }
 
 func (g *guildSession) getUser(userID string) (user *discordgo.User, err error) {

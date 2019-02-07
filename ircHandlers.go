@@ -212,11 +212,15 @@ func (c *ircConn) handleJOIN(m *irc.Message) {
 			}
 
 			tag := uuid.New().String()
+			if c.user.supportedCapabilities["batch"] {
 			c.sendBATCH(true, tag, "chathistory", channelName)
+			}
 			for i := len(messages); i != 0; i-- { // Discord sends them in reverse order
 				sendMessageFromDiscordToIRC(c, messages[i-1], "", tag) // TODO: maybe prefix with date
 			}
+			if c.user.supportedCapabilities["batch"] {
 			c.sendBATCH(false, tag)
+			}
 		}(c, discordChannel)
 		go c.handleNAMES(&irc.Message{Command: irc.NAMES, Params: []string{channelName}})
 	}

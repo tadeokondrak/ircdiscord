@@ -16,12 +16,12 @@ type guildSession struct {
 	guildSessionType
 	guild      *discordgo.Guild
 	session    *discordgo.Session
-	self       *discordgo.User
+	self       *discordgo.Member
 	userMap    *snowflakemap.SnowflakeMap
 	channelMap *snowflakemap.SnowflakeMap
 	roleMap    *snowflakemap.SnowflakeMap
 	channels   map[string]*discordgo.Channel // map[channelid]Channel
-	users      map[string]*discordgo.User    // map[userid]User
+	members    map[string]*discordgo.Member
 	roles      map[string]*discordgo.Role
 	conns      []*ircConn
 }
@@ -57,7 +57,12 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 		sessionType = guildSessionDM
 	}
 
-	self, err := discordSession.User("@me")
+	selfUser, err := discordSession.User("@me")
+	if err != nil {
+		return
+	}
+
+	self, err := discordSession.GuildMember(guild.ID, selfUser.ID)
 	if err != nil {
 		return
 	}
@@ -71,7 +76,7 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 		userMap:          snowflakemap.NewSnowflakeMap("`"),
 		roleMap:          snowflakemap.NewSnowflakeMap("@"),
 		channels:         make(map[string]*discordgo.Channel),
-		users:            make(map[string]*discordgo.User),
+		members:          make(map[string]*discordgo.Member),
 		roles:            make(map[string]*discordgo.Role),
 		conns:            []*ircConn{},
 	}
@@ -122,7 +127,7 @@ func (g *guildSession) populateUserMap(after string) (err error) {
 	}
 
 	for _, member := range members {
-		g.addUser(member.User)
+		g.addMember(member)
 	}
 
 	return
@@ -185,27 +190,32 @@ func (g *guildSession) removeRole(roleID string) {
 	g.roleMap.RemoveSnowflake(roleID)
 }
 
-func (g *guildSession) addUser(user *discordgo.User) (name string) {
-	if user.Discriminator == "0000" {
-		// We don't add users for webhooks because they're not users
-		return ""
-	}
-	g.users[user.ID] = user
-	return g.userMap.Add(convertDiscordUsernameToIRCNick(user.Username), user.ID)
+func (g *guildSession) addMember(member *discordgo.Member) (name string) {
+	g.members[member.User.ID] = member
+	return g.userMap.Add(convertDiscordUsernameToIRCNick(member.User.Username), member.User.ID)
 }
 
 func (g *guildSession) getUser(userID string) (user *discordgo.User, err error) {
-	channel, exists := g.users[userID]
+	member, err := g.getMember(userID)
+	if err != nil {
+		return
+	}
+	return member.User, nil
+}
+
+func (g *guildSession) getMember(userID string) (member *discordgo.Member, err error) {
+	// TODO: find all functions that search g.members itself
+	member, exists := g.members[userID]
 	if exists {
 		return
 	}
 
-	channel, err = g.session.User(userID)
+	member, err = g.session.GuildMember(g.guild.ID, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	g.users[userID] = channel
+	g.members[userID] = member
 	return
 }
 

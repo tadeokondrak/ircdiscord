@@ -76,6 +76,7 @@ func channelCreate(session *discordgo.Session, channel *discordgo.ChannelCreate)
 }
 
 func channelDelete(session *discordgo.Session, channel *discordgo.ChannelDelete) {
+	// TODO: kick user from channel
 	guildSession, exists := guildSessions[session.Token][channel.GuildID]
 	if !exists {
 		return

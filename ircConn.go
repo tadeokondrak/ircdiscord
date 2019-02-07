@@ -94,9 +94,9 @@ func (c *ircConn) connect() (err error) {
 	c.loggedin = true
 
 	c.clientPrefix = irc.Prefix{
-		Name: c.getNick(c.self),
-		User: convertDiscordUsernameToIRCRealname(c.self.Username),
-		Host: c.self.ID,
+		Name: c.getNick(c.self.User),
+		User: convertDiscordUsernameToIRCRealname(c.self.User.Username),
+		Host: c.self.User.ID,
 	}
 
 	return
@@ -110,7 +110,7 @@ func (c *ircConn) register() (err error) {
 		return
 	}
 
-	nick := c.getNick(c.self)
+	nick := c.getNick(c.self.User)
 
 	if nick == "" {
 		c.sendNOTICE("something with discord failed, we couldn't get a nick")

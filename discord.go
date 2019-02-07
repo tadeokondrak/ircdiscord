@@ -24,7 +24,7 @@ func isRecentlySentMessage(user *ircConn, message *discordgo.Message) bool {
 	if message.Author == nil || user.guildSession.self == nil {
 		return false
 	}
-	if user.guildSession.self.ID != message.Author.ID {
+	if user.guildSession.self.User.ID != message.Author.ID {
 		return false
 	}
 	if recentlySentMessages, exists := user.recentlySentMessages[message.ChannelID]; exists {

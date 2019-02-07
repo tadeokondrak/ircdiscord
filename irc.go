@@ -68,7 +68,7 @@ func replaceMentions(c *ircConn, m *discordgo.Message) (content string) {
 	for _, mentionedUser := range m.Mentions {
 		username := c.guildSession.userMap.GetName(mentionedUser.ID)
 		colour := "12"
-		if mentionedUser.ID == c.self.ID {
+		if mentionedUser.ID == c.self.User.ID {
 			colour = "12\x16"
 		}
 		if username != "" {
@@ -80,10 +80,11 @@ func replaceMentions(c *ircConn, m *discordgo.Message) (content string) {
 	}
 	for _, roleID := range m.MentionRoles {
 		roleName := c.guildSession.roleMap.GetName(roleID)
-		// role := c.guildSession.roles[roleID]
 		colour := "03"
-		if true {
-			colour = "03\x16"
+		for _, role := range c.guildSession.self.Roles {
+			if roleID == role {
+				colour = "03\x16"
+			}
 		}
 		content = strings.Replace(content, "<@&"+roleID+">", "\x03"+colour+"\x02@"+roleName+"\x0f", -1)
 	}

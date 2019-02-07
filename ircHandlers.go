@@ -261,11 +261,28 @@ func (c *ircConn) handleNAMES(m *irc.Message) {
 		c.sendRPL(irc.RPL_ENDOFNAMES, "*", "End of /NAMES list")
 		return
 	}
-	for ircNick := range c.guildSession.userMap.GetSnowflakeMap() {
-		c.sendRPL(irc.RPL_NAMREPLY, "=", m.Params[0], ircNick)
+	ircNicks := c.guildSession.userMap.GetSnowflakeMap()
+	ircNickArray := make([]string, 0, len(ircNicks))
+	for nick := range ircNicks {
+		ircNickArray = append(ircNickArray, nick)
+	}
+	done := false
+	for i := 0; !done; {
+		_ircNicks := []string{}
+		for len(strings.Join(_ircNicks, " ")) < 400 {
+			if i >= len(ircNickArray) {
+				done = true
+				break
+			}
+			nick := ircNickArray[i]
+			_ircNicks = append(_ircNicks, nick)
+			i++
+		}
+		c.sendRPL(irc.RPL_NAMREPLY, "=", m.Params[0], strings.Join(_ircNicks, " "))
+	}
+
 		c.sendRPL(irc.RPL_ENDOFNAMES, m.Params[0], "End of /NAMES list")
 	}
-}
 
 func (c *ircConn) handleLIST(m *irc.Message) {
 	if len(m.Params) > 0 {

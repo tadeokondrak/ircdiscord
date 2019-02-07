@@ -156,7 +156,7 @@ func (c *ircConn) handleTOPIC(m *irc.Message) {
 		return
 	}
 
-	channel, err := c.guildSession.getChannel(channelID)
+	channel, err := c.getChannel(channelID)
 	if err != nil {
 		return
 	}
@@ -189,7 +189,7 @@ func (c *ircConn) handleJOIN(m *irc.Message) {
 			continue
 		}
 
-		discordChannel, err := c.guildSession.getChannel(discordChannelID)
+		discordChannel, err := c.getChannel(discordChannelID)
 		if err != nil {
 			c.sendNOTICE(fmt.Sprint(err))
 			fmt.Println("error fetching channel data")
@@ -277,16 +277,16 @@ func (c *ircConn) handleNAMES(m *irc.Message) {
 		return
 	}
 	var ircNickArray []string
-	if c.guildSession.guildSessionType == guildSessionGuild {
+	if c.guildSessionType == guildSessionGuild {
 		ircNicks := c.guildSession.userMap.GetSnowflakeMap()
 		ircNickArray = []string{}
 		for nick := range ircNicks {
 			ircNickArray = append(ircNickArray, nick)
 		}
-	} else if c.guildSession.guildSessionType == guildSessionDM {
-		ircNickArray := []string{}
-		channelID := c.guildSession.channelMap.GetName(m.Params[0])
-		channel, err := c.guildSession.getChannel(channelID)
+	} else if c.guildSessionType == guildSessionDM {
+		ircNickArray = []string{}
+		channelID := c.guildSession.channelMap.GetSnowflake(m.Params[0])
+		channel, err := c.getChannel(channelID)
 		if err != nil {
 			// TODO: error
 			return
@@ -294,6 +294,7 @@ func (c *ircConn) handleNAMES(m *irc.Message) {
 		for _, user := range channel.Recipients {
 			ircNickArray = append(ircNickArray, c.getNick(user))
 		}
+		ircNickArray = append(ircNickArray, c.getNick(c.selfUser))
 	}
 	done := false
 	for i := 0; !done; {
@@ -320,7 +321,7 @@ func (c *ircConn) handleLIST(m *irc.Message) {
 	}
 	c.sendRPL(irc.RPL_LISTSTART, "Channels", "Users  Name")
 	for ircChannel, discordChannelID := range c.guildSession.channelMap.GetSnowflakeMap() {
-		discordChannel, err := c.guildSession.getChannel(discordChannelID)
+		discordChannel, err := c.getChannel(discordChannelID)
 		if err != nil {
 			c.sendNOTICE(fmt.Sprint(err))
 			fmt.Println("error getting channel")

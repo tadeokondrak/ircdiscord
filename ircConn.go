@@ -121,9 +121,9 @@ func (c *ircConn) register() (err error) {
 	c.sendNICK("", "", "", nick)
 
 	c.sendRPL(irc.RPL_WELCOME, fmt.Sprintf("Welcome to the Discord Internet Relay Chat Network %s", nick))
-	c.sendRPL(irc.RPL_YOURHOST, fmt.Sprintf("Your host is %[1]s, running version %[2]s", "serverhostname", "ircdiscord-version"))
+	c.sendRPL(irc.RPL_YOURHOST, fmt.Sprintf("Your host is %[1]s, running version IRCdiscord-%[2]s", "serverhostname", version))
 	c.sendRPL(irc.RPL_CREATED, fmt.Sprintf("This server was created %s", humanize.Time(startTime)))
-	c.sendRPL(irc.RPL_MYINFO, c.serverPrefix.Host, "ircdiscord-"+version, "", "", "b")
+	c.sendRPL(irc.RPL_MYINFO, c.serverPrefix.Host, "IRCdiscord-"+version, "", "", "b")
 	c.sendRPL(irc.RPL_ISUPPORT, "NICKLEN=10", "are supported by this server") // TODO: change nicklen to be more accurate
 	// The server SHOULD then respond as though the client sent the LUSERS command and return the appropriate numerics
 	// c.handleLUSERS()

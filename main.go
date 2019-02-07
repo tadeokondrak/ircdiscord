@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	version = "0.0.0-20190205-7" // TODO: update
+	version = "0.0.0" // TODO: update
 )
 
 var (

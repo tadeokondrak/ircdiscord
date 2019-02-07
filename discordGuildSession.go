@@ -180,12 +180,19 @@ func (g *guildSession) getChannel(channelID string) (channel *discordgo.Channel,
 
 func (g *guildSession) addChannel(channel *discordgo.Channel) (name string) {
 	g.channels[channel.ID] = channel
-	if channel.Type != discordgo.ChannelTypeGuildText && channel.Type != discordgo.ChannelTypeDM {
+	if channel.Type != discordgo.ChannelTypeGuildText && channel.Type != discordgo.ChannelTypeDM && channel.Type != discordgo.ChannelTypeGroupDM {
 		return ""
 	}
 
-	if channel.Recipients != nil && len(channel.Recipients) == 1 { // DM channel
-		name = g.getNick(channel.Recipients[0])
+	if channel.Recipients != nil && len(channel.Recipients) > 0 { // DM channel
+		if len(channel.Recipients) == 1 {
+			name = g.getNick(channel.Recipients[0])
+		} else {
+			for _, user := range channel.Recipients {
+				name = name + g.getNick(user) + "#"
+			}
+			name = convertDiscordChannelNameToIRC(name[:len(name)-1])
+		}
 	} else {
 		name = convertDiscordChannelNameToIRC(channel.Name)
 	}

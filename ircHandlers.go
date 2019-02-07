@@ -175,6 +175,11 @@ func (c *ircConn) handleJOIN(m *irc.Message) {
 		return
 	}
 
+	if c.channels[m.Params[0]] {
+		// user already on channel
+		return
+	}
+
 	for _, channelName := range strings.Split(m.Params[0], ",") {
 		discordChannelID := c.guildSession.channelMap.GetSnowflake(channelName)
 		if discordChannelID == "" {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"regexp"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -60,4 +61,31 @@ func convertDiscordTopicToIRC(discordContent string, session *discordgo.Session)
 
 func convertDiscordContentToIRC(discordContent string, session *discordgo.Session) (ircContent string) {
 	return discordContent
+}
+
+func replaceMentions(c *ircConn, m *discordgo.Message) (content string) {
+	content = m.Content
+	for _, mentionedUser := range m.Mentions {
+		username := c.guildSession.userMap.GetName(mentionedUser.ID)
+		colour := "12"
+		if mentionedUser.ID == c.self.ID {
+			colour = "12\x16"
+		}
+		if username != "" {
+			content = strings.NewReplacer(
+				"<@"+mentionedUser.ID+">", "\x03"+colour+"\x02@"+username+"\x0f",
+				"<@!"+mentionedUser.ID+">", "\x03"+colour+"\x02@"+username+"\x0f",
+			).Replace(content)
+		}
+	}
+	for _, roleID := range m.MentionRoles {
+		roleName := c.guildSession.roleMap.GetName(roleID)
+		// role := c.guildSession.roles[roleID]
+		colour := "03"
+		if true {
+			colour = "03\x16"
+		}
+		content = strings.Replace(content, "<@&"+roleID+">", "\x03"+colour+"\x02@"+roleName+"\x0f", -1)
+	}
+	return
 }

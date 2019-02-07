@@ -16,6 +16,9 @@ func addHandlers(s *discordgo.Session) {
 	s.AddHandler(channelCreate)
 	s.AddHandler(channelDelete)
 	s.AddHandler(channelUpdate)
+	s.AddHandler(guildRoleCreate)
+	s.AddHandler(guildRoleDelete)
+	s.AddHandler(guildRoleUpdate)
 }
 
 func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
@@ -87,4 +90,29 @@ func channelUpdate(session *discordgo.Session, channel *discordgo.ChannelUpdate)
 		return
 	}
 	guildSession.updateChannel(channel.Channel)
+}
+
+func guildRoleCreate(session *discordgo.Session, role *discordgo.GuildRoleCreate) {
+	guildSession, exists := guildSessions[session.Token][role.GuildID]
+	if !exists {
+		return
+	}
+	guildSession.addRole(role.Role)
+}
+
+func guildRoleDelete(session *discordgo.Session, role *discordgo.GuildRoleDelete) {
+	guildSession, exists := guildSessions[session.Token][role.GuildID]
+	if !exists {
+		return
+	}
+	guildSession.removeRole(role.RoleID)
+}
+
+func guildRoleUpdate(session *discordgo.Session, role *discordgo.GuildRoleUpdate) {
+	// TODO: handle channel name changes somehow
+	guildSession, exists := guildSessions[session.Token][role.GuildID]
+	if !exists {
+		return
+	}
+	guildSession.updateRole(role.Role)
 }

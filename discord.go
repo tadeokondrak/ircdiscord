@@ -10,20 +10,6 @@ import (
 	"github.com/tadeokondrak/irc"
 )
 
-func replaceMentions(user *ircConn, message *discordgo.Message) (content string) {
-	content = message.Content
-	for _, mentionedUser := range message.Mentions {
-		username := user.guildSession.userMap.GetName(mentionedUser.ID)
-		if username != "" {
-			content = strings.NewReplacer(
-				"<@"+mentionedUser.ID+">", "\x0312\x02@"+username+"\x0f",
-				"<@!"+mentionedUser.ID+">", "\x0312\x02@"+username+"\x0f",
-			).Replace(content)
-		}
-	}
-	return
-}
-
 func getTimeFromSnowflake(snowflake string) time.Time {
 	var snowInt, unix uint64
 	snowInt, _ = strconv.ParseUint(snowflake, 10, 64)

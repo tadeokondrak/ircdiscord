@@ -19,8 +19,10 @@ type guildSession struct {
 	self       *discordgo.User
 	userMap    *snowflakemap.SnowflakeMap
 	channelMap *snowflakemap.SnowflakeMap
+	roleMap    *snowflakemap.SnowflakeMap
 	channels   map[string]*discordgo.Channel // map[channelid]Channel
 	users      map[string]*discordgo.User    // map[userid]User
+	roles      map[string]*discordgo.Role
 	conns      []*ircConn
 }
 
@@ -67,8 +69,10 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 		self:             self,
 		channelMap:       snowflakemap.NewSnowflakeMap("#"),
 		userMap:          snowflakemap.NewSnowflakeMap("`"),
+		roleMap:          snowflakemap.NewSnowflakeMap("@"),
 		channels:         make(map[string]*discordgo.Channel),
 		users:            make(map[string]*discordgo.User),
+		roles:            make(map[string]*discordgo.Role),
 		conns:            []*ircConn{},
 	}
 
@@ -86,6 +90,11 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 		return nil, err
 	}
 
+	err = session.populateRoleMap()
+	if err != nil {
+		return nil, err
+	}
+
 	return
 }
 
@@ -96,7 +105,6 @@ func (g *guildSession) populateChannelMap() (err error) {
 	}
 
 	for _, channel := range channels {
-		g.channels[channel.ID] = channel
 		g.addChannel(channel)
 	}
 
@@ -114,8 +122,20 @@ func (g *guildSession) populateUserMap(after string) (err error) {
 	}
 
 	for _, member := range members {
-		g.users[member.User.ID] = member.User
 		g.addUser(member.User)
+	}
+
+	return
+}
+
+func (g *guildSession) populateRoleMap() (err error) {
+	roles, err := g.session.GuildRoles(g.guild.ID)
+	if err != nil {
+		return err
+	}
+
+	for _, role := range roles {
+		g.addRole(role)
 	}
 
 	return
@@ -152,11 +172,25 @@ func (g *guildSession) removeChannel(channel *discordgo.Channel) {
 	g.channelMap.RemoveSnowflake(channel.ID)
 }
 
+func (g *guildSession) addRole(role *discordgo.Role) (name string) {
+	g.roles[role.ID] = role
+	return g.roleMap.Add(role.Name, role.ID)
+}
+
+func (g *guildSession) updateRole(role *discordgo.Role) {
+	g.roles[role.ID] = role
+}
+
+func (g *guildSession) removeRole(roleID string) {
+	g.roleMap.RemoveSnowflake(roleID)
+}
+
 func (g *guildSession) addUser(user *discordgo.User) (name string) {
 	if user.Discriminator == "0000" {
 		// We don't add users for webhooks because they're not users
 		return ""
 	}
+	g.users[user.ID] = user
 	return g.userMap.Add(convertDiscordUsernameToIRCNick(user.Username), user.ID)
 }
 

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"sync"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/tadeokondrak/IRCdiscord/snowflakemap"
 )
@@ -14,20 +16,25 @@ const (
 
 type guildSession struct {
 	guildSessionType
-	guild      *discordgo.Guild
-	session    *discordgo.Session
-	selfMember *discordgo.Member
-	selfUser   *discordgo.User
-	userMap    *snowflakemap.SnowflakeMap
-	channelMap *snowflakemap.SnowflakeMap
-	roleMap    *snowflakemap.SnowflakeMap
-	channels   map[string]*discordgo.Channel // map[channelid]Channel
-	members    map[string]*discordgo.Member
-	roles      map[string]*discordgo.Role
-	messages   map[string]*discordgo.Message
-	users      map[string]*discordgo.User
-	lastAck    *discordgo.Ack
-	conns      []*ircConn
+	guild         *discordgo.Guild
+	session       *discordgo.Session
+	selfMember    *discordgo.Member
+	selfUser      *discordgo.User
+	userMap       *snowflakemap.SnowflakeMap
+	channelMap    *snowflakemap.SnowflakeMap
+	roleMap       *snowflakemap.SnowflakeMap
+	channels      map[string]*discordgo.Channel // map[channelid]Channel
+	channelsMutex sync.RWMutex
+	members       map[string]*discordgo.Member
+	membersMutex  sync.RWMutex
+	roles         map[string]*discordgo.Role
+	rolesMutex    sync.RWMutex
+	messages      map[string]*discordgo.Message
+	messagesMutex sync.RWMutex
+	users         map[string]*discordgo.User
+	usersMutex    sync.RWMutex
+	lastAck       *discordgo.Ack
+	conns         []*ircConn
 }
 
 // if guildID is empty, will return guildSession for DM server
@@ -84,10 +91,15 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 		userMap:          snowflakemap.NewSnowflakeMap("`"),
 		roleMap:          snowflakemap.NewSnowflakeMap("@"),
 		channels:         make(map[string]*discordgo.Channel),
+		channelsMutex:    sync.RWMutex{},
 		members:          make(map[string]*discordgo.Member),
+		membersMutex:     sync.RWMutex{},
 		roles:            make(map[string]*discordgo.Role),
+		rolesMutex:       sync.RWMutex{},
 		messages:         make(map[string]*discordgo.Message),
+		messagesMutex:    sync.RWMutex{},
 		users:            make(map[string]*discordgo.User),
+		usersMutex:       sync.RWMutex{},
 		lastAck:          &discordgo.Ack{},
 		conns:            []*ircConn{},
 	}
@@ -164,6 +176,8 @@ func (g *guildSession) populateRoleMap() (err error) {
 }
 
 func (g *guildSession) getChannel(channelID string) (channel *discordgo.Channel, err error) {
+	g.channelsMutex.Lock()
+	defer g.channelsMutex.Unlock()
 	channel, exists := g.channels[channelID]
 	if exists {
 		return
@@ -179,7 +193,9 @@ func (g *guildSession) getChannel(channelID string) (channel *discordgo.Channel,
 }
 
 func (g *guildSession) addChannel(channel *discordgo.Channel) (name string) {
+	g.channelsMutex.Lock()
 	g.channels[channel.ID] = channel
+	g.channelsMutex.Unlock()
 	if channel.Type != discordgo.ChannelTypeGuildText && channel.Type != discordgo.ChannelTypeDM && channel.Type != discordgo.ChannelTypeGroupDM {
 		return ""
 	}
@@ -201,7 +217,9 @@ func (g *guildSession) addChannel(channel *discordgo.Channel) (name string) {
 }
 
 func (g *guildSession) updateChannel(channel *discordgo.Channel) {
+	g.channelsMutex.Lock()
 	g.channels[channel.ID] = channel
+	g.channelsMutex.Unlock()
 }
 
 func (g *guildSession) removeChannel(channel *discordgo.Channel) {
@@ -209,12 +227,16 @@ func (g *guildSession) removeChannel(channel *discordgo.Channel) {
 }
 
 func (g *guildSession) addRole(role *discordgo.Role) (name string) {
+	g.rolesMutex.Lock()
 	g.roles[role.ID] = role
+	g.rolesMutex.Unlock()
 	return g.roleMap.Add(role.Name, role.ID)
 }
 
 func (g *guildSession) updateRole(role *discordgo.Role) {
+	g.rolesMutex.Lock()
 	g.roles[role.ID] = role
+	defer g.rolesMutex.Unlock()
 }
 
 func (g *guildSession) removeRole(roleID string) {
@@ -222,12 +244,16 @@ func (g *guildSession) removeRole(roleID string) {
 }
 
 func (g *guildSession) addMember(member *discordgo.Member) (name string) {
+	g.membersMutex.Lock()
 	g.members[member.User.ID] = member
+	g.membersMutex.Unlock()
 	return g.addUser(member.User)
 }
 
 func (g *guildSession) updateMember(member *discordgo.Member) {
+	g.membersMutex.Lock()
 	g.members[member.User.ID] = member
+	g.membersMutex.Unlock()
 	g.updateUser(member.User)
 }
 
@@ -236,12 +262,16 @@ func (g *guildSession) removeMember(member *discordgo.Member) {
 }
 
 func (g *guildSession) addUser(user *discordgo.User) (name string) {
+	g.usersMutex.Lock()
 	g.users[user.ID] = user
+	g.usersMutex.Unlock()
 	return g.userMap.Add(convertDiscordUsernameToIRCNick(user.Username), user.ID)
 }
 
 func (g *guildSession) updateUser(user *discordgo.User) {
+	g.usersMutex.Lock()
 	g.users[user.ID] = user
+	g.usersMutex.Unlock()
 }
 
 func (g *guildSession) removeUser(user *discordgo.User) {
@@ -249,7 +279,9 @@ func (g *guildSession) removeUser(user *discordgo.User) {
 }
 
 func (g *guildSession) addMessage(message *discordgo.Message) {
+	g.messagesMutex.Lock()
 	g.messages[message.ID] = message
+	g.messagesMutex.Unlock()
 }
 
 func (g *guildSession) updateMessage(message *discordgo.Message) {
@@ -257,6 +289,8 @@ func (g *guildSession) updateMessage(message *discordgo.Message) {
 }
 
 func (g *guildSession) getMessage(channelID string, messageID string) (message *discordgo.Message, err error) {
+	g.messagesMutex.Lock()
+	defer g.messagesMutex.Unlock()
 	message, exists := g.messages[messageID]
 	if exists {
 		return
@@ -280,7 +314,8 @@ func (g *guildSession) getUser(userID string) (user *discordgo.User, err error) 
 }
 
 func (g *guildSession) getMember(userID string) (member *discordgo.Member, err error) {
-	// TODO: find all functions that search g.members itself
+	g.membersMutex.Lock()
+	defer g.membersMutex.Unlock()
 	member, exists := g.members[userID]
 	if exists {
 		return

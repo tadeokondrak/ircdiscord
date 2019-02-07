@@ -151,7 +151,7 @@ func (c *ircConn) handleTOPIC(m *irc.Message) {
 
 	channelID := c.guildSession.channelMap.GetSnowflake(channelName)
 
-	if !c.channels[channelName] {
+	if !c.channels[channelID] {
 		c.sendERR(irc.ERR_NOTONCHANNEL, "You're not on that channel")
 		return
 	}
@@ -175,7 +175,9 @@ func (c *ircConn) handleJOIN(m *irc.Message) {
 		return
 	}
 
-	if c.channels[m.Params[0]] {
+	channelID := c.guildSession.channelMap.GetSnowflake(m.Params[0])
+
+	if c.channels[channelID] {
 		// user already on channel
 		return
 	}
@@ -194,11 +196,11 @@ func (c *ircConn) handleJOIN(m *irc.Message) {
 			continue
 		}
 		c.guildSession.channels[discordChannelID] = discordChannel
-		c.channels[channelName] = true
+		c.channels[discordChannelID] = true
 
 		c.sendJOIN("", "", "", channelName)
 
-		c.handleTOPIC(&irc.Message{
+		go c.handleTOPIC(&irc.Message{
 			Command: irc.TOPIC,
 			Params:  []string{channelName},
 		})
@@ -212,7 +214,7 @@ func (c *ircConn) handleJOIN(m *irc.Message) {
 
 			channelName := c.guildSession.channelMap.GetName(channel.ID)
 			if channelName == "" {
-				c.sendNOTICE("This shouldn't happen. If you see this, report it as a bug.")
+				c.sendNOTICE("This shouldn't happen (1). If you see this, report it as a bug.")
 				return
 			}
 
@@ -252,11 +254,11 @@ func (c *ircConn) handlePART(m *irc.Message) {
 			c.sendERR(irc.ERR_NOSUCHCHANNEL, "No such channel")
 			continue
 		}
-		if _, exists := c.channels[channelName]; !exists {
+		if _, exists := c.channels[discordChannelID]; !exists {
 			c.sendERR(irc.ERR_NOTONCHANNEL, "You're not on that channel")
 			continue
 		}
-		c.channels[channelName] = false
+		c.channels[discordChannelID] = false
 		c.sendPART("", "", "", channelName, reason)
 	}
 }
@@ -274,10 +276,24 @@ func (c *ircConn) handleNAMES(m *irc.Message) {
 		c.sendRPL(irc.RPL_ENDOFNAMES, "*", "End of /NAMES list")
 		return
 	}
-	ircNicks := c.guildSession.userMap.GetSnowflakeMap()
-	ircNickArray := make([]string, 0, len(ircNicks))
-	for nick := range ircNicks {
-		ircNickArray = append(ircNickArray, nick)
+	var ircNickArray []string
+	if c.guildSession.guildSessionType == guildSessionGuild {
+		ircNicks := c.guildSession.userMap.GetSnowflakeMap()
+		ircNickArray = []string{}
+		for nick := range ircNicks {
+			ircNickArray = append(ircNickArray, nick)
+		}
+	} else if c.guildSession.guildSessionType == guildSessionDM {
+		ircNickArray := []string{}
+		channelID := c.guildSession.channelMap.GetName(m.Params[0])
+		channel, err := c.guildSession.getChannel(channelID)
+		if err != nil {
+			// TODO: error
+			return
+		}
+		for _, user := range channel.Recipients {
+			ircNickArray = append(ircNickArray, c.getNick(user))
+		}
 	}
 	done := false
 	for i := 0; !done; {

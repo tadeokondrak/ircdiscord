@@ -21,10 +21,10 @@ func addRecentlySentMessage(user *ircConn, channelID string, content string) {
 }
 
 func isRecentlySentMessage(user *ircConn, message *discordgo.Message) bool {
-	if message.Author == nil || user.guildSession.self == nil {
+	if message.Author == nil || user.guildSession.selfUser == nil {
 		return false
 	}
-	if user.guildSession.self.User.ID != message.Author.ID {
+	if user.guildSession.selfUser.ID != message.Author.ID {
 		return false
 	}
 	if recentlySentMessages, exists := user.recentlySentMessages[message.ChannelID]; exists {
@@ -57,7 +57,11 @@ func (g *guildSession) sendMessageFromDiscordToIRC(message *discordgo.Message) {
 func sendMessageFromDiscordToIRC(date time.Time, user *ircConn, message *discordgo.Message, prefixString string, batchTag string) {
 	ircChannel := user.guildSession.channelMap.GetName(message.ChannelID)
 
-	if ircChannel == "" || !user.channels[ircChannel] || isRecentlySentMessage(user, message) || message.Author == nil {
+	if user.guildSession.guildSessionType == guildSessionGuild && !user.channels[message.ChannelID] {
+		return
+	}
+
+	if ircChannel == "" || isRecentlySentMessage(user, message) || message.Author == nil {
 		return
 	}
 

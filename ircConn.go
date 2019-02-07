@@ -40,7 +40,7 @@ type ircConn struct {
 
 func (c *ircConn) connect() (err error) {
 	args := strings.Split(c.user.password, ":")
-	if len(args) < 2 || (*serverPass != "" && len(args) < 3) { // TODO: change this when we add DM support
+	if len(args) < 1 || (*serverPass != "" && len(args) < 2) { // TODO: change this when we add DM support
 		return errors.New("Invalid password (not enough arguments)")
 	}
 
@@ -94,9 +94,9 @@ func (c *ircConn) connect() (err error) {
 	c.loggedin = true
 
 	c.clientPrefix = irc.Prefix{
-		Name: c.getNick(c.self.User),
-		User: convertDiscordUsernameToIRCRealname(c.self.User.Username),
-		Host: c.self.User.ID,
+		Name: c.getNick(c.selfUser),
+		User: convertDiscordUsernameToIRCRealname(c.selfUser.Username),
+		Host: c.selfUser.ID,
 	}
 
 	return
@@ -110,13 +110,14 @@ func (c *ircConn) register() (err error) {
 		return
 	}
 
-	nick := c.getNick(c.self.User)
+	nick := c.getNick(c.selfUser)
 
 	if nick == "" {
 		c.sendNOTICE("something with discord failed, we couldn't get a nick")
 		c.close()
 		return
 	}
+
 	c.sendNICK("", "", "", nick)
 
 	c.sendRPL(irc.RPL_WELCOME, fmt.Sprintf("Welcome to the Discord Internet Relay Chat Network %s", nick))

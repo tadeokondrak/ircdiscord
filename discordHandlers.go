@@ -24,7 +24,13 @@ func addHandlers(s *discordgo.Session) {
 }
 
 func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
-	guildSession, exists := guildSessions[session.Token][message.GuildID]
+	var guildSession *guildSession
+	var exists bool
+	if message.GuildID != "" {
+		guildSession, exists = guildSessions[session.Token][message.GuildID]
+	} else if message.ChannelID != "" {
+		guildSession, exists = guildSessions[session.Token][""]
+	}
 	if !exists {
 		return
 	}

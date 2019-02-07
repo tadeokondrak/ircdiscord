@@ -16,7 +16,8 @@ type guildSession struct {
 	guildSessionType
 	guild      *discordgo.Guild
 	session    *discordgo.Session
-	self       *discordgo.Member
+	selfMember *discordgo.Member
+	selfUser   *discordgo.User
 	userMap    *snowflakemap.SnowflakeMap
 	channelMap *snowflakemap.SnowflakeMap
 	roleMap    *snowflakemap.SnowflakeMap
@@ -24,6 +25,7 @@ type guildSession struct {
 	members    map[string]*discordgo.Member
 	roles      map[string]*discordgo.Role
 	messages   map[string]*discordgo.Message
+	users      map[string]*discordgo.User
 	lastAck    *discordgo.Ack
 	conns      []*ircConn
 }
@@ -64,16 +66,20 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 		return
 	}
 
-	self, err := discordSession.GuildMember(guild.ID, selfUser.ID)
-	if err != nil {
-		return
+	var selfMember *discordgo.Member
+	if sessionType == guildSessionGuild {
+		selfMember, err = discordSession.GuildMember(guild.ID, selfUser.ID)
+		if err != nil {
+			return
+		}
 	}
 
 	session = &guildSession{
 		guildSessionType: sessionType,
 		guild:            guild,
 		session:          discordSession,
-		self:             self,
+		selfMember:       selfMember,
+		selfUser:         selfUser,
 		channelMap:       snowflakemap.NewSnowflakeMap("#"),
 		userMap:          snowflakemap.NewSnowflakeMap("`"),
 		roleMap:          snowflakemap.NewSnowflakeMap("@"),
@@ -81,12 +87,9 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 		members:          make(map[string]*discordgo.Member),
 		roles:            make(map[string]*discordgo.Role),
 		messages:         make(map[string]*discordgo.Message),
+		users:            make(map[string]*discordgo.User),
 		lastAck:          &discordgo.Ack{},
 		conns:            []*ircConn{},
-	}
-
-	if guild == nil {
-		return nil, err
 	}
 
 	err = session.populateChannelMap()
@@ -94,23 +97,33 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 		return nil, err
 	}
 
-	err = session.populateUserMap("")
-	if err != nil {
-		return nil, err
-	}
+	if sessionType == guildSessionGuild {
+		err = session.populateUserMap("")
+		if err != nil {
+			return nil, err
+		}
 
-	err = session.populateRoleMap()
-	if err != nil {
-		return nil, err
+		err = session.populateRoleMap()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return
 }
 
 func (g *guildSession) populateChannelMap() (err error) {
-	channels, err := g.session.GuildChannels(g.guild.ID)
-	if err != nil {
-		return err
+	var channels []*discordgo.Channel
+	if g.guildSessionType == guildSessionGuild {
+		channels, err = g.session.GuildChannels(g.guild.ID)
+		if err != nil {
+			return err
+		}
+	} else if g.guildSessionType == guildSessionDM {
+		channels, err = g.session.UserChannels()
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, channel := range channels {
@@ -170,7 +183,14 @@ func (g *guildSession) addChannel(channel *discordgo.Channel) (name string) {
 	if channel.Type != discordgo.ChannelTypeGuildText && channel.Type != discordgo.ChannelTypeDM {
 		return ""
 	}
-	return g.channelMap.Add(convertDiscordChannelNameToIRC(channel.Name), channel.ID)
+
+	if channel.Recipients != nil && len(channel.Recipients) == 1 { // DM channel
+		name = g.getNick(channel.Recipients[0])
+	} else {
+		name = convertDiscordChannelNameToIRC(channel.Name)
+	}
+
+	return g.channelMap.Add(name, channel.ID)
 }
 
 func (g *guildSession) updateChannel(channel *discordgo.Channel) {
@@ -196,15 +216,29 @@ func (g *guildSession) removeRole(roleID string) {
 
 func (g *guildSession) addMember(member *discordgo.Member) (name string) {
 	g.members[member.User.ID] = member
-	return g.userMap.Add(convertDiscordUsernameToIRCNick(member.User.Username), member.User.ID)
+	return g.addUser(member.User)
 }
 
 func (g *guildSession) updateMember(member *discordgo.Member) {
 	g.members[member.User.ID] = member
+	g.updateUser(member.User)
 }
 
 func (g *guildSession) removeMember(member *discordgo.Member) {
-	g.userMap.RemoveSnowflake(member.User.ID)
+	g.removeUser(member.User)
+}
+
+func (g *guildSession) addUser(user *discordgo.User) (name string) {
+	g.users[user.ID] = user
+	return g.userMap.Add(convertDiscordUsernameToIRCNick(user.Username), user.ID)
+}
+
+func (g *guildSession) updateUser(user *discordgo.User) {
+	g.users[user.ID] = user
+}
+
+func (g *guildSession) removeUser(user *discordgo.User) {
+	g.userMap.RemoveSnowflake(user.ID)
 }
 
 func (g *guildSession) addMessage(message *discordgo.Message) {
@@ -263,5 +297,11 @@ func (g *guildSession) getNick(discordUser *discordgo.User) (nick string) {
 		return convertDiscordUsernameToIRCNick(discordUser.Username) + "`w"
 	}
 
+	nick = g.userMap.GetName(discordUser.ID)
+	if nick != "" {
+		return
+	}
+
+	nick = g.addUser(discordUser)
 	return g.userMap.GetName(discordUser.ID)
 }

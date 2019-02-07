@@ -10,7 +10,13 @@ import (
 func convertDiscordChannelNameToIRC(discordName string) (IRCName string) {
 	re := regexp.MustCompile(`[^a-zA-Z0-9\-_]+`)
 	cleaned := re.ReplaceAllString(discordName, "")
-	return truncate("#"+cleaned, 50)
+	IRCName = truncate("#"+cleaned, 50)
+
+	if IRCName == "" {
+		IRCName = "_"
+	}
+
+	return
 }
 
 func convertDiscordUsernameToIRCUser(discordName string) (IRCUser string) {
@@ -68,7 +74,7 @@ func replaceMentions(c *ircConn, m *discordgo.Message) (content string) {
 	for _, mentionedUser := range m.Mentions {
 		username := c.guildSession.userMap.GetName(mentionedUser.ID)
 		colour := "12"
-		if mentionedUser.ID == c.self.User.ID {
+		if mentionedUser.ID == c.selfUser.ID {
 			colour = "12\x16"
 		}
 		if username != "" {
@@ -81,7 +87,7 @@ func replaceMentions(c *ircConn, m *discordgo.Message) (content string) {
 	for _, roleID := range m.MentionRoles {
 		roleName := c.guildSession.roleMap.GetName(roleID)
 		colour := "03"
-		for _, role := range c.guildSession.self.Roles {
+		for _, role := range c.guildSession.selfMember.Roles {
 			if roleID == role {
 				colour = "03\x16"
 			}

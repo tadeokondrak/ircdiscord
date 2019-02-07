@@ -184,7 +184,7 @@ func (g *guildSession) addChannel(channel *discordgo.Channel) (name string) {
 		return ""
 	}
 
-	if channel.Recipients != nil && len(channel.Recipients) > 0 { // DM channel
+	if channel.Name == "" && channel.Recipients != nil && len(channel.Recipients) > 0 { // DM channel
 		if len(channel.Recipients) == 1 {
 			name = g.getNick(channel.Recipients[0])
 		} else {

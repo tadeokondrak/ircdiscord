@@ -213,13 +213,13 @@ func (c *ircConn) handleJOIN(m *irc.Message) {
 
 			tag := uuid.New().String()
 			if c.user.supportedCapabilities["batch"] {
-			c.sendBATCH(true, tag, "chathistory", channelName)
+				c.sendBATCH(true, tag, "chathistory", channelName)
 			}
 			for i := len(messages); i != 0; i-- { // Discord sends them in reverse order
 				sendMessageFromDiscordToIRC(c, messages[i-1], "", tag) // TODO: maybe prefix with date
 			}
 			if c.user.supportedCapabilities["batch"] {
-			c.sendBATCH(false, tag)
+				c.sendBATCH(false, tag)
 			}
 		}(c, discordChannel)
 		go c.handleNAMES(&irc.Message{Command: irc.NAMES, Params: []string{channelName}})
@@ -285,8 +285,8 @@ func (c *ircConn) handleNAMES(m *irc.Message) {
 		c.sendRPL(irc.RPL_NAMREPLY, "=", m.Params[0], strings.Join(_ircNicks, " "))
 	}
 
-		c.sendRPL(irc.RPL_ENDOFNAMES, m.Params[0], "End of /NAMES list")
-	}
+	c.sendRPL(irc.RPL_ENDOFNAMES, m.Params[0], "End of /NAMES list")
+}
 
 func (c *ircConn) handleLIST(m *irc.Message) {
 	if len(m.Params) > 0 {

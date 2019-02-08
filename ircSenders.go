@@ -92,6 +92,15 @@ func (c *ircConn) sendNICK(nick string, realname string, hostname string, newNic
 	return
 }
 
+func (c *ircConn) sendPING(message string) (err error) {
+	err = c.encode(&irc.Message{
+		Command: irc.PING,
+		Params:  []string{message},
+	})
+	c.lastPING = message
+	return
+}
+
 func (c *ircConn) sendPONG(message string) (err error) {
 	params := []string{}
 	if message != "" {

@@ -25,13 +25,13 @@ func addHandlers(s *discordgo.Session) {
 
 func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate) {
 	var guildSession *guildSession
-	var exists bool
+	var err error
 	if message.GuildID != "" {
-		guildSession, exists = guildSessions[session.Token][message.GuildID]
+		guildSession, err = getGuildSession(session.Token, message.GuildID)
 	} else if message.ChannelID != "" {
-		guildSession, exists = guildSessions[session.Token][""]
+		guildSession, err = getGuildSession(session.Token, "")
 	}
-	if !exists {
+	if err != nil {
 		return
 	}
 	guildSession.addMessage(message.Message)
@@ -45,12 +45,11 @@ func messageCreate(session *discordgo.Session, message *discordgo.MessageCreate)
 		}
 		sendMessageFromDiscordToIRC(date, conn, message.Message, "", "")
 	}
-	guildSession.lastAck, _ = guildSession.session.ChannelMessageAck(message.ChannelID, message.ID, guildSession.lastAck.Token)
 }
 
 func messageUpdate(session *discordgo.Session, message *discordgo.MessageUpdate) {
-	guildSession, exists := guildSessions[session.Token][message.GuildID]
-	if !exists {
+	guildSession, err := getGuildSession(session.Token, message.GuildID)
+	if err != nil {
 		return
 	}
 	oldMessage, err := guildSession.getMessage(message.ChannelID, message.ID)
@@ -72,8 +71,8 @@ func messageUpdate(session *discordgo.Session, message *discordgo.MessageUpdate)
 }
 
 func messageDelete(session *discordgo.Session, message *discordgo.MessageDelete) {
-	guildSession, exists := guildSessions[session.Token][message.GuildID]
-	if !exists {
+	guildSession, err := getGuildSession(session.Token, message.GuildID)
+	if err != nil {
 		return
 	}
 	for _, conn := range guildSession.conns {
@@ -91,8 +90,8 @@ func messageDelete(session *discordgo.Session, message *discordgo.MessageDelete)
 }
 
 func channelCreate(session *discordgo.Session, channel *discordgo.ChannelCreate) {
-	guildSession, exists := guildSessions[session.Token][channel.GuildID]
-	if !exists {
+	guildSession, err := getGuildSession(session.Token, channel.GuildID)
+	if err != nil {
 		return
 	}
 	guildSession.addChannel(channel.Channel)
@@ -100,8 +99,8 @@ func channelCreate(session *discordgo.Session, channel *discordgo.ChannelCreate)
 
 func channelDelete(session *discordgo.Session, channel *discordgo.ChannelDelete) {
 	// TODO: kick user from channel
-	guildSession, exists := guildSessions[session.Token][channel.GuildID]
-	if !exists {
+	guildSession, err := getGuildSession(session.Token, channel.GuildID)
+	if err != nil {
 		return
 	}
 	guildSession.removeChannel(channel.Channel)
@@ -109,24 +108,24 @@ func channelDelete(session *discordgo.Session, channel *discordgo.ChannelDelete)
 
 func channelUpdate(session *discordgo.Session, channel *discordgo.ChannelUpdate) {
 	// TODO: handle channel name changes somehow
-	guildSession, exists := guildSessions[session.Token][channel.GuildID]
-	if !exists {
+	guildSession, err := getGuildSession(session.Token, channel.GuildID)
+	if err != nil {
 		return
 	}
 	guildSession.updateChannel(channel.Channel)
 }
 
 func guildRoleCreate(session *discordgo.Session, role *discordgo.GuildRoleCreate) {
-	guildSession, exists := guildSessions[session.Token][role.GuildID]
-	if !exists {
+	guildSession, err := getGuildSession(session.Token, role.GuildID)
+	if err != nil {
 		return
 	}
 	guildSession.addRole(role.Role)
 }
 
 func guildRoleDelete(session *discordgo.Session, role *discordgo.GuildRoleDelete) {
-	guildSession, exists := guildSessions[session.Token][role.GuildID]
-	if !exists {
+	guildSession, err := getGuildSession(session.Token, role.GuildID)
+	if err != nil {
 		return
 	}
 	guildSession.removeRole(role.RoleID)
@@ -134,16 +133,16 @@ func guildRoleDelete(session *discordgo.Session, role *discordgo.GuildRoleDelete
 
 func guildRoleUpdate(session *discordgo.Session, role *discordgo.GuildRoleUpdate) {
 	// TODO: handle channel name changes somehow
-	guildSession, exists := guildSessions[session.Token][role.GuildID]
-	if !exists {
+	guildSession, err := getGuildSession(session.Token, role.GuildID)
+	if err != nil {
 		return
 	}
 	guildSession.updateRole(role.Role)
 }
 
 func guildMemberAdd(session *discordgo.Session, member *discordgo.GuildMemberAdd) {
-	guildSession, exists := guildSessions[session.Token][member.GuildID]
-	if !exists {
+	guildSession, err := getGuildSession(session.Token, member.GuildID)
+	if err != nil {
 		return
 	}
 	guildSession.addMember(member.Member)
@@ -164,8 +163,8 @@ func guildMemberAdd(session *discordgo.Session, member *discordgo.GuildMemberAdd
 }
 
 func guildMemberUpdate(session *discordgo.Session, member *discordgo.GuildMemberUpdate) {
-	guildSession, exists := guildSessions[session.Token][member.GuildID]
-	if !exists {
+	guildSession, err := getGuildSession(session.Token, member.GuildID)
+	if err != nil {
 		return
 	}
 	guildSession.updateMember(member.Member)
@@ -173,8 +172,8 @@ func guildMemberUpdate(session *discordgo.Session, member *discordgo.GuildMember
 }
 
 func guildMemberRemove(session *discordgo.Session, member *discordgo.GuildMemberRemove) {
-	guildSession, exists := guildSessions[session.Token][member.GuildID]
-	if !exists {
+	guildSession, err := getGuildSession(session.Token, member.GuildID)
+	if err != nil {
 		return
 	}
 	guildSession.removeMember(member.Member)

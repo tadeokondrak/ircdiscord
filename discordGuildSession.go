@@ -1,9 +1,12 @@
 package main
 
 import (
+	"errors"
 	"sync"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/google/uuid"
 	"github.com/tadeokondrak/IRCdiscord/snowflakemap"
 )
 
@@ -33,27 +36,122 @@ type guildSession struct {
 	messagesMutex sync.RWMutex
 	users         map[string]*discordgo.User
 	usersMutex    sync.RWMutex
-	lastAck       *discordgo.Ack
 	conns         []*ircConn
+	connsMutex    sync.RWMutex
+}
+
+func newDiscordSession(token string) (session *discordgo.Session, err error) {
+	session, err = discordgo.New(token)
+	if err != nil {
+		return nil, err
+	}
+
+	addHandlers(session)
+
+	err = session.Open()
+	if err != nil {
+		return nil, err
+	}
+
+	discordSessionsMutex.Lock()
+	discordSessions[token] = session
+	discordSessionsMutex.Unlock()
+	return session, nil
+}
+
+var pingTicker = time.NewTicker(60 * time.Second)
+
+func pingPongLoop() {
+	for range pingTicker.C {
+		conns := []*ircConn{}
+		sessions := []*guildSession{}
+		guildsessionsMutex.Lock()
+		for _, sessionMap := range guildSessions {
+			for _, session := range sessionMap {
+				sessions = append(sessions, session)
+				for _, conn := range session.conns {
+					conns = append(conns, conn)
+				}
+			}
+		}
+		guildsessionsMutex.Unlock()
+
+		// remove all conns that aren't connected
+		var wg sync.WaitGroup
+		wg.Add(len(conns))
+		for _, c := range conns {
+			go func(c *ircConn) {
+				defer wg.Done()
+				c.sendPING(uuid.New().String())
+				time.Sleep(30 * time.Second)
+				if c.lastPING != c.lastPONG {
+					c.close()
+				}
+			}(c)
+		}
+		wg.Wait()
+
+		// remove all guildSessions without a conn
+		wg = sync.WaitGroup{}
+		wg.Add(len(sessions))
+		for _, s := range sessions {
+			go func(s *guildSession) {
+				defer wg.Done()
+				if len(s.conns) < 1 {
+					guildsessionsMutex.Lock()
+					if guildSessions[s.session.Token] != nil && s.guild != nil {
+						delete(guildSessions[s.session.Token], s.guild.ID)
+					}
+					guildsessionsMutex.Unlock()
+				}
+			}(s)
+		}
+		wg.Wait()
+
+		// remove all discordSessions without a guildSession
+		wg = sync.WaitGroup{}
+		wg.Add(len(guildSessions))
+		guildsessionsMutex.Lock()
+		for token, sessionMap := range guildSessions {
+			go func(token string, sessionMap map[string]*guildSession) {
+				defer wg.Done()
+				if len(sessionMap) < 1 {
+					if discordSessions[token] != nil {
+						discordSessions[token].Close()
+					}
+					delete(discordSessions, token)
+					delete(sessionMap, token)
+				}
+			}(token, sessionMap)
+		}
+		guildsessionsMutex.Unlock()
+		wg.Wait()
+	}
+}
+
+func getGuildSession(token string, guildID string) (session *guildSession, err error) {
+	guildsessionsMutex.Lock()
+	if _, exists := guildSessions[token]; !exists {
+		guildSessions[token] = make(map[string]*guildSession)
+	}
+	session, exists := guildSessions[token][guildID]
+	guildsessionsMutex.Unlock()
+	if !exists {
+		return nil, errors.New("Couldn't find guild session")
+	}
+	return
 }
 
 // if guildID is empty, will return guildSession for DM server
 func newGuildSession(token string, guildID string) (session *guildSession, err error) {
+	discordSessionsMutex.Lock()
 	discordSession, exists := discordSessions[token]
+	discordSessionsMutex.Unlock()
 	if !exists {
-		discordSession, err = discordgo.New(token)
+		discordSession, err = newDiscordSession(token)
 		if err != nil {
 			return nil, err
 		}
-
-		addHandlers(discordSession)
-
-		err = discordSession.Open()
-		if err != nil {
-			return nil, err
-		}
-
-		discordSessions[token] = discordSession
 	}
 
 	var guild *discordgo.Guild
@@ -88,7 +186,7 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 		selfMember:       selfMember,
 		selfUser:         selfUser,
 		channelMap:       snowflakemap.NewSnowflakeMap("#"),
-		userMap:          snowflakemap.NewSnowflakeMap("`"),
+		userMap:          snowflakemap.NewSnowflakeMap("|"),
 		roleMap:          snowflakemap.NewSnowflakeMap("@"),
 		channels:         make(map[string]*discordgo.Channel),
 		channelsMutex:    sync.RWMutex{},
@@ -100,8 +198,8 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 		messagesMutex:    sync.RWMutex{},
 		users:            make(map[string]*discordgo.User),
 		usersMutex:       sync.RWMutex{},
-		lastAck:          &discordgo.Ack{},
 		conns:            []*ircConn{},
+		connsMutex:       sync.RWMutex{},
 	}
 
 	err = session.populateChannelMap()
@@ -121,7 +219,10 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 		}
 	}
 
-	return
+	guildsessionsMutex.Lock()
+	guildSessions[token][guildID] = session
+	guildsessionsMutex.Unlock()
+	return session, nil
 }
 
 func (g *guildSession) populateChannelMap() (err error) {
@@ -265,7 +366,11 @@ func (g *guildSession) addUser(user *discordgo.User) (name string) {
 	g.usersMutex.Lock()
 	g.users[user.ID] = user
 	g.usersMutex.Unlock()
-	return g.userMap.Add(convertDiscordUsernameToIRCNick(user.Username), user.ID)
+	member, err := g.getMember(user.ID)
+	if member != nil && err == nil && member.Nick != "" {
+		return g.userMap.Add(getIRCNick(member.Nick), user.ID)
+	}
+	return g.userMap.Add(getIRCNick(user.Username), user.ID)
 }
 
 func (g *guildSession) updateUser(user *discordgo.User) {
@@ -321,6 +426,10 @@ func (g *guildSession) getMember(userID string) (member *discordgo.Member, err e
 		return
 	}
 
+	if g.session == nil || g.guild == nil {
+		return nil, err
+	}
+
 	member, err = g.session.GuildMember(g.guild.ID, userID)
 	if err != nil {
 		return nil, err
@@ -330,20 +439,41 @@ func (g *guildSession) getMember(userID string) (member *discordgo.Member, err e
 	return
 }
 
-func (g *guildSession) getNick(discordUser *discordgo.User) (nick string) {
-	if discordUser == nil {
+func (g *guildSession) getNick(user *discordgo.User) (nick string) {
+	if user == nil {
 		return ""
 	}
 
-	if discordUser.Discriminator == "0000" { // webhooks don't have nicknames
-		return convertDiscordUsernameToIRCNick(discordUser.Username) + "`w"
+	if user.Discriminator == "0000" { // webhooks don't have nicknames
+		return getIRCNick(user.Username) + "|w"
 	}
 
-	nick = g.userMap.GetName(discordUser.ID)
+	nick = g.userMap.GetName(user.ID)
 	if nick != "" {
 		return
 	}
 
-	nick = g.addUser(discordUser)
-	return g.userMap.GetName(discordUser.ID)
+	g.addUser(user)
+	return g.userMap.GetName(user.ID)
+}
+
+func (g *guildSession) getRealname(user *discordgo.User) (realname string) {
+	return g.getNick(user)
+}
+
+func (g *guildSession) addConn(conn *ircConn) {
+	g.connsMutex.Lock()
+	g.conns = append(g.conns, conn)
+	g.connsMutex.Unlock()
+}
+
+func (g *guildSession) removeConn(conn *ircConn) {
+	g.connsMutex.Lock()
+	for i, _conn := range g.conns {
+		if conn == _conn {
+			g.conns = append(g.conns[:i], g.conns[i+1:]...)
+			break
+		}
+	}
+	g.connsMutex.Unlock()
 }

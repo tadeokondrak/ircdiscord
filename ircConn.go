@@ -26,6 +26,7 @@ type ircUser struct {
 type ircConn struct {
 	*guildSession
 	channels             map[string]bool // map[channnelid]bool
+	channelsMutex        sync.RWMutex
 	passwordEntered      bool
 	loggedin             bool
 	clientPrefix         irc.Prefix
@@ -35,6 +36,8 @@ type ircConn struct {
 	conn                 net.Conn
 	user                 ircUser
 	reader               *bufio.Reader
+	lastPING             string
+	lastPONG             string
 	sync.Mutex
 }
 
@@ -66,23 +69,14 @@ func (c *ircConn) connect() (err error) {
 		}
 	}
 
-	if _, exists := guildSessions[token]; !exists {
-		guildSessions[token] = make(map[string]*guildSession)
-	}
-
-	guildSession, exists := guildSessions[token][guildID]
-	if !exists { // we should lock guildSessions somehow while doing this
-		var err error
+	guildSession, err := getGuildSession(token, guildID)
+	if err != nil {
 		guildSession, err = newGuildSession(token, guildID)
 		if err != nil {
-			if guildSession != nil && guildSession.session != nil {
-				guildSession.session.Close()
-			}
 			c.sendNOTICE("Failed to connect to Discord. Check if your token is correct")
 			c.close()
 			return err
 		}
-		guildSessions[token][guildID] = guildSession
 	}
 
 	if guildSession == nil {
@@ -90,7 +84,7 @@ func (c *ircConn) connect() (err error) {
 	}
 
 	c.guildSession = guildSession
-	guildSession.conns = append(guildSession.conns, c) // FIXME: this should be a function with a mutex
+	c.guildSession.addConn(c)
 	c.loggedin = true
 
 	c.clientPrefix = irc.Prefix{
@@ -124,7 +118,10 @@ func (c *ircConn) register() (err error) {
 	c.sendRPL(irc.RPL_YOURHOST, fmt.Sprintf("Your host is %[1]s, running version IRCdiscord-%[2]s", "serverhostname", version))
 	c.sendRPL(irc.RPL_CREATED, fmt.Sprintf("This server was created %s", humanize.Time(startTime)))
 	c.sendRPL(irc.RPL_MYINFO, c.serverPrefix.Host, "IRCdiscord-"+version, "", "", "b")
-	c.sendRPL(irc.RPL_ISUPPORT, "NICKLEN=10", "are supported by this server") // TODO: change nicklen to be more accurate
+	c.sendRPL(irc.RPL_ISUPPORT, "NICKLEN=32 MAXNICKLEN=36 AWAYLEN=0 KICKLEN=0 CHANTYPES=#", "are supported by this server") // TODO: change nicklen to be more accurate
+	// TODO: KICKLEN is the max ban reason in discord
+	// CHANNELLEN is the max channel name length
+	//
 	// The server SHOULD then respond as though the client sent the LUSERS command and return the appropriate numerics
 	// c.handleLUSERS()
 	// If the user has client modes set on them automatically upon joining the network, the server SHOULD send the client the RPL_UMODEIS (221) reply.
@@ -149,15 +146,7 @@ func (c *ircConn) readyToRegister() bool {
 
 func (c *ircConn) close() (err error) {
 	if c.guildSession != nil {
-		// TODO: split this into its own function, with a mutex
-		for index, conn := range c.guildSession.conns {
-			if conn == c {
-				c.guildSession.conns = append(c.guildSession.conns[index:], c.guildSession.conns[index+1:]...)
-			}
-		}
-		if c.guildSession.session != nil && len(c.guildSession.conns) == 0 {
-			err = c.guildSession.session.Close()
-		}
+		c.guildSession.removeConn(c)
 	}
 	if c.conn != nil {
 		err = c.conn.Close()

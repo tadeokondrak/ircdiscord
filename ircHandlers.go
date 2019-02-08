@@ -10,6 +10,25 @@ import (
 	"github.com/tadeokondrak/irc"
 )
 
+func (c *ircConn) handleWHOIS(m *irc.Message) {
+	if len(m.Params) < 1 {
+		c.sendERR(irc.ERR_NEEDMOREPARAMS, irc.WHOIS, "Not enough parameters")
+		return
+	}
+	userID := c.guildSession.userMap.GetSnowflake(m.Params[0])
+	if userID == "" {
+		c.sendNOTICE("Failed to find that user")
+		return
+	}
+	user, err := c.getUser(userID)
+	_ = user
+	if err != nil {
+		c.sendNOTICE("Failed to find that user")
+		return
+	}
+	c.sendRPL(irc.RPL_WHOISUSER, c.getNick(user), c.getRealname(user), user.ID, "*", user.String())
+}
+
 func (c *ircConn) handleCAP(m *irc.Message) {
 	const ERR_INVALIDCAPCMD = "410"
 	if len(m.Params) < 1 {
@@ -151,10 +170,13 @@ func (c *ircConn) handleTOPIC(m *irc.Message) {
 
 	channelID := c.guildSession.channelMap.GetSnowflake(channelName)
 
+	c.channelsMutex.Lock()
 	if !c.channels[channelID] {
+		c.channelsMutex.Unlock()
 		c.sendERR(irc.ERR_NOTONCHANNEL, "You're not on that channel")
 		return
 	}
+	c.channelsMutex.Unlock()
 
 	channel, err := c.getChannel(channelID)
 	if err != nil {
@@ -177,10 +199,13 @@ func (c *ircConn) handleJOIN(m *irc.Message) {
 
 	channelID := c.guildSession.channelMap.GetSnowflake(m.Params[0])
 
+	c.channelsMutex.Lock()
 	if c.channels[channelID] {
 		// user already on channel
+		c.channelsMutex.Unlock()
 		return
 	}
+	c.channelsMutex.Unlock()
 
 	for _, channelName := range strings.Split(m.Params[0], ",") {
 		discordChannelID := c.guildSession.channelMap.GetSnowflake(channelName)
@@ -195,8 +220,10 @@ func (c *ircConn) handleJOIN(m *irc.Message) {
 			fmt.Println("error fetching channel data")
 			continue
 		}
-		c.guildSession.channels[discordChannelID] = discordChannel
+
+		c.channelsMutex.Lock()
 		c.channels[discordChannelID] = true
+		c.channelsMutex.Unlock()
 
 		c.sendJOIN("", "", "", channelName)
 
@@ -258,7 +285,9 @@ func (c *ircConn) handlePART(m *irc.Message) {
 			c.sendERR(irc.ERR_NOTONCHANNEL, "You're not on that channel")
 			continue
 		}
+		c.channelsMutex.Lock()
 		c.channels[discordChannelID] = false
+		c.channelsMutex.Unlock()
 		c.sendPART("", "", "", channelName, reason)
 	}
 }
@@ -269,6 +298,13 @@ func (c *ircConn) handlePING(m *irc.Message) {
 	} else {
 		c.sendPONG("")
 	}
+}
+
+func (c *ircConn) handlePONG(m *irc.Message) {
+	if len(m.Params) < 1 {
+		return
+	}
+	c.lastPONG = m.Params[0]
 }
 
 func (c *ircConn) handleNAMES(m *irc.Message) {

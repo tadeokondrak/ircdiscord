@@ -54,14 +54,16 @@ func convertIRCMentionsToDiscord(user *ircConn, message string) (content string)
 
 func (g *guildSession) sendMessageFromDiscordToIRC(message *discordgo.Message) {}
 
-func sendMessageFromDiscordToIRC(date time.Time, user *ircConn, message *discordgo.Message, prefixString string, batchTag string) {
-	ircChannel := user.guildSession.channelMap.GetName(message.ChannelID)
-
-	if user.guildSession.guildSessionType == guildSessionGuild && !user.channels[message.ChannelID] {
+func sendMessageFromDiscordToIRC(date time.Time, c *ircConn, m *discordgo.Message, prefixString string, batchTag string) {
+	ircChannel := c.guildSession.channelMap.GetName(m.ChannelID)
+	c.channelsMutex.Lock()
+	if c.guildSession.guildSessionType == guildSessionGuild && !c.channels[m.ChannelID] {
+		c.channelsMutex.Unlock()
 		return
 	}
+	c.channelsMutex.Unlock()
 
-	if ircChannel == "" || isRecentlySentMessage(user, message) || message.Author == nil {
+	if ircChannel == "" || isRecentlySentMessage(c, m) || m.Author == nil {
 		return
 	}
 
@@ -73,20 +75,20 @@ func sendMessageFromDiscordToIRC(date time.Time, user *ircConn, message *discord
 		tags["batch"] = batchTag
 	}
 
-	nick := user.guildSession.getNick(message.Author)
+	nick := c.guildSession.getNick(m.Author)
 
 	// TODO: check if edited and put (edited) with low contrast
-	discordContent := replaceMentions(user, message)
+	discordContent := replaceMentions(c, m)
 
-	content := prefixString + convertDiscordContentToIRC(discordContent, user.session)
+	content := prefixString + convertDiscordContentToIRC(discordContent)
 	if content != "" {
 		for _, line := range strings.Split(content, "\n") {
-			user.sendPRIVMSG(tags, nick, nick, message.Author.ID, ircChannel, line)
+			c.sendPRIVMSG(tags, nick, nick, m.Author.ID, ircChannel, line)
 		}
 	}
 
-	for _, attachment := range message.Attachments {
-		user.sendPRIVMSG(tags, nick, nick, message.Author.ID, ircChannel, convertDiscordContentToIRC(attachment.URL, user.session))
+	for _, attachment := range m.Attachments {
+		c.sendPRIVMSG(tags, nick, nick, m.Author.ID, ircChannel, convertDiscordContentToIRC(attachment.URL))
 	}
 }
 

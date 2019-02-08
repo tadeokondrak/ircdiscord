@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -24,14 +25,16 @@ var (
 		"server-time",
 		"batch",
 	}
-	discordSessions = map[string]*discordgo.Session{}
-	guildSessions   = map[string]map[string]*guildSession{}
-	ircSessions     = map[string]map[string][]*ircConn{}
+	discordSessions      = map[string]*discordgo.Session{}
+	discordSessionsMutex = sync.RWMutex{}
+	guildSessions        = map[string]map[string]*guildSession{}
+	guildsessionsMutex   = sync.RWMutex{}
 )
 
 func handleConnection(conn net.Conn) {
 	serverHostname := conn.LocalAddr().(*net.TCPAddr).IP.String()
 	clientHostname := conn.RemoteAddr().(*net.TCPAddr).IP.String()
+	// TODO: function for new irc conn
 	c := &ircConn{
 		serverPrefix: irc.Prefix{
 			Name: serverHostname,
@@ -44,6 +47,7 @@ func handleConnection(conn net.Conn) {
 		recentlySentMessages: make(map[string][]string),
 		conn:                 conn,
 		channels:             make(map[string]bool),
+		channelsMutex:        sync.RWMutex{},
 		user: ircUser{
 			nick:                  "*",
 			username:              "*",
@@ -79,19 +83,17 @@ func handleConnection(conn net.Conn) {
 		case irc.NICK:
 			c.handleNICK(message)
 			continue
+		case irc.PING:
+			go c.handlePING(message)
+			continue
+		case irc.PONG:
+			go c.handlePONG(message)
+			continue
 		}
 
 		if c.loggedin {
 			switch message.Command {
-			case irc.NICK:
-				go c.handleNICK(message)
-				continue
-			case irc.USER:
-				go c.handleUSER(message)
-				continue
-			case irc.PING:
-				go c.handlePING(message)
-				continue
+
 			case irc.JOIN:
 				go c.handleJOIN(message)
 				continue
@@ -106,6 +108,9 @@ func handleConnection(conn net.Conn) {
 				continue
 			case irc.NAMES:
 				go c.handleNAMES(message)
+				continue
+			case irc.WHOIS:
+				go c.handleWHOIS(message)
 				continue
 			}
 		}
@@ -152,6 +157,7 @@ func main() {
 		return
 	}
 
+	go pingPongLoop()
 	defer server.Close()
 	for {
 		conn, err := server.Accept()

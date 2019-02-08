@@ -72,9 +72,9 @@ func (m *SnowflakeMap) Add(name string, snowflake string) string {
 func (m *SnowflakeMap) GetName(snowflake string) string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	snowflake, exists := m.names[snowflake]
+	name, exists := m.names[snowflake]
 	if exists {
-		return snowflake
+		return name
 	}
 	return ""
 }

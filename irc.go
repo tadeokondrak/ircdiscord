@@ -19,53 +19,59 @@ func convertDiscordChannelNameToIRC(discordName string) (IRCName string) {
 	return
 }
 
-func convertDiscordUsernameToIRCUser(discordName string) (IRCUser string) {
-	re := regexp.MustCompile("[^a-zA-Z0-9\\[\\]\\{\\}\\^_\\-|`\\\\]+") //T ODO: `
-	cleaned := re.ReplaceAllString(discordName, "")
-
-	IRCUser = truncate(cleaned, 20) // arbitrary limit, i couldn't find a real one
-
-	if IRCUser == "" {
-		IRCUser = "_"
-	}
-
-	return
+func removeWhitespace(input string) string {
+	re := regexp.MustCompile("[\x20\x00\x0d\x0a]+")
+	return re.ReplaceAllString(input, "")
 }
 
-func convertDiscordUsernameToIRCRealname(discordName string) (IRCName string) {
-	re := regexp.MustCompile("[^a-zA-Z0-9\\[\\]\\{\\}\\^_\\-|`\\\\ ]+") // TODO: `
-	cleaned := re.ReplaceAllString(discordName, "")
-
-	IRCName = truncate(cleaned, 20) // arbitrary limit, i couldn't find a real one
-
-	if IRCName == "" {
-		IRCName = "_"
-	}
-
-	return
+func removeWhitespaceAndComma(input string) string {
+	re := regexp.MustCompile("[,]+")
+	return re.ReplaceAllString(removeWhitespace(input), "")
 }
 
-func convertDiscordUsernameToIRCNick(discordName string) (IRCNick string) {
-	re := regexp.MustCompile("[^a-zA-Z0-9\\[\\]\\{\\}\\^_\\-|\\\\]+") // TODO: `
-	cleaned := re.ReplaceAllString(discordName, "")
-
-	IRCNick = truncate(cleaned, 12)
-
-	if IRCNick == "" {
-		IRCNick = "_"
+func underscoreIfEmpty(input string) string {
+	if input == "" {
+		return "_"
 	}
+	return input
+}
 
-	return
+func convertDiscordUsernameToIRCUser(name string) string {
+	return underscoreIfEmpty(removeWhitespace(name))
+}
+
+func convertDiscordUsernameToIRCRealname(name string) string {
+	return underscoreIfEmpty(removeWhitespaceAndComma(name))
+}
+
+func getIRCNick(name string) (nick string) {
+	// if user != nil {
+	// if member.Nick != "" {
+	// name = member.Nick
+	// } else {
+	// name = member.User.Username
+	// }
+	// }
+
+	re := regexp.MustCompile(`[^A-Za-z0-9\-[\]\\\x60\{\}]+`)
+	nick = underscoreIfEmpty(re.ReplaceAllString(name, ""))
+
+	// // must not start with number
+	// r, _ := utf8.DecodeRuneInString(nick)
+	// if r > '0' && r < '9' {
+	// 	return "_" + nick
+	// }
+	return nick
 }
 
 func convertDiscordTopicToIRC(discordContent string, session *discordgo.Session) (ircContent string) {
-	content := convertDiscordContentToIRC(discordContent, session)
+	content := convertDiscordContentToIRC(discordContent)
 	newlines := regexp.MustCompile("[\n]+")
 	ircContent = newlines.ReplaceAllString(content, "")
 	return
 }
 
-func convertDiscordContentToIRC(discordContent string, session *discordgo.Session) (ircContent string) {
+func convertDiscordContentToIRC(discordContent string) (ircContent string) {
 	return discordContent
 }
 

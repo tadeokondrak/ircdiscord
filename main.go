@@ -26,9 +26,9 @@ var (
 		"batch",
 	}
 	discordSessions      = map[string]*discordgo.Session{}
-	discordSessionsMutex = sync.RWMutex{}
+	discordSessionsMutex = sync.Mutex{}
 	guildSessions        = map[string]map[string]*guildSession{}
-	guildsessionsMutex   = sync.RWMutex{}
+	guildsessionsMutex   = sync.Mutex{}
 )
 
 func handleConnection(conn net.Conn) {

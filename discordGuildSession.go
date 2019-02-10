@@ -145,8 +145,8 @@ func getGuildSession(token string, guildID string) (session *guildSession, err e
 // if guildID is empty, will return guildSession for DM server
 func newGuildSession(token string, guildID string) (session *guildSession, err error) {
 	discordSessionsMutex.Lock()
+	defer discordSessionsMutex.Unlock()
 	discordSession, exists := discordSessions[token]
-	discordSessionsMutex.Unlock()
 	if !exists {
 		discordSession, err = newDiscordSession(token)
 		if err != nil {

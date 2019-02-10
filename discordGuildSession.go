@@ -264,10 +264,7 @@ func (g *guildSession) populateUserMap(after string) (err error) {
 }
 
 func (g *guildSession) populateRoleMap() (err error) {
-	roles, err := g.session.GuildRoles(g.guild.ID)
-	if err != nil {
-		return err
-	}
+	roles := g.guild.Roles
 
 	for _, role := range roles {
 		g.addRole(role)
@@ -418,6 +415,34 @@ func (g *guildSession) getUser(userID string) (user *discordgo.User, err error) 
 	return member.User, nil
 }
 
+func (g *guildSession) getRole(roleID string) (role *discordgo.Role, err error) {
+	g.rolesMutex.Lock()
+	defer g.rolesMutex.Unlock()
+	role, exists := g.roles[roleID]
+	if exists {
+		return
+	}
+
+	if g.session == nil || g.guild == nil {
+		return nil, err
+	}
+
+	roles, err := g.session.GuildRoles(g.guild.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, _role := range roles {
+		g.addRole(_role)
+	}
+
+	role, exists = g.roles[roleID]
+	if exists {
+		return
+	}
+
+	return nil, err
+}
+
 func (g *guildSession) getMember(userID string) (member *discordgo.Member, err error) {
 	g.membersMutex.Lock()
 	defer g.membersMutex.Unlock()
@@ -459,6 +484,14 @@ func (g *guildSession) getNick(user *discordgo.User) (nick string) {
 
 func (g *guildSession) getRealname(user *discordgo.User) (realname string) {
 	return g.getNick(user)
+}
+
+func (g *guildSession) getChannelName(channel *discordgo.Channel) (channelname string) {
+	return g.channelMap.GetName(channel.ID)
+}
+
+func (g *guildSession) getRoleName(role *discordgo.Role) (rolename string) {
+	return g.roleMap.GetName(role.ID)
 }
 
 func (g *guildSession) addConn(conn *ircConn) {

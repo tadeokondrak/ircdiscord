@@ -77,18 +77,11 @@ func sendMessageFromDiscordToIRC(date time.Time, c *ircConn, m *discordgo.Messag
 
 	nick := c.guildSession.getNick(m.Author)
 
-	// TODO: check if edited and put (edited) with low contrast
-	discordContent := replaceMentions(c, m)
-
-	content := prefixString + convertDiscordContentToIRC(discordContent)
+	content := prefixString + convertDiscordMessageToIRC(m, c)
 	if content != "" {
 		for _, line := range strings.Split(content, "\n") {
 			c.sendPRIVMSG(tags, nick, nick, m.Author.ID, ircChannel, line)
 		}
-	}
-
-	for _, attachment := range m.Attachments {
-		c.sendPRIVMSG(tags, nick, nick, m.Author.ID, ircChannel, convertDiscordContentToIRC(attachment.URL))
 	}
 }
 

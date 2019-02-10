@@ -183,7 +183,7 @@ func (c *ircConn) handleTOPIC(m *irc.Message) {
 		return
 	}
 
-	topic := convertDiscordTopicToIRC(channel.Topic, c.guildSession.session)
+	topic := convertDiscordTopicToIRC(channel.Topic, c)
 
 	if topic != "" {
 		c.sendRPL(irc.RPL_TOPIC, channelName, topic)
@@ -368,7 +368,7 @@ func (c *ircConn) handleLIST(m *irc.Message) {
 			irc.RPL_LIST,
 			ircChannel,
 			strconv.Itoa(c.guildSession.userMap.Length()),
-			convertDiscordTopicToIRC(discordChannel.Topic, c.session),
+			convertDiscordTopicToIRC(discordChannel.Topic, c),
 		)
 	}
 	c.sendRPL(irc.RPL_LISTEND, "End of /LIST")

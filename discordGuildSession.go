@@ -145,6 +145,7 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 	discordSession, exists := discordSessions[token]
 	if !exists {
 		discordSession, err = newDiscordSession(token)
+		discordSessions[token] = discordSession
 		if err != nil {
 			return nil, err
 		}

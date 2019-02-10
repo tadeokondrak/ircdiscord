@@ -406,6 +406,7 @@ func (g *guildSession) getMessage(channelID string, messageID string) (message *
 }
 
 func (g *guildSession) getUser(userID string) (user *discordgo.User, err error) {
+	// TODO: get this to work for DMs, right now DM mentions don't work
 	member, err := g.getMember(userID)
 	if err != nil {
 		return
@@ -442,6 +443,9 @@ func (g *guildSession) getRole(roleID string) (role *discordgo.Role, err error) 
 }
 
 func (g *guildSession) getMember(userID string) (member *discordgo.Member, err error) {
+	if g.guildSessionType != guildSessionGuild {
+		return nil, err
+	}
 	g.membersMutex.Lock()
 	defer g.membersMutex.Unlock()
 	member, exists := g.members[userID]

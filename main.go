@@ -24,6 +24,7 @@ var (
 	supportedCapabilities = []string{
 		"server-time",
 		"batch",
+		"echo-message",
 	}
 	discordSessions      = map[string]*discordgo.Session{}
 	discordSessionsMutex = sync.Mutex{}

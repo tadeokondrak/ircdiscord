@@ -16,21 +16,24 @@ func getTimeFromSnowflake(snowflake string) time.Time {
 	unix = (snowInt >> 22) + 1420070400000
 	return time.Unix(0, int64(unix)*1000000)
 }
-func addRecentlySentMessage(user *ircConn, channelID string, content string) {
-	user.recentlySentMessages[channelID] = append(user.recentlySentMessages[channelID], content)
+func addRecentlySentMessage(c *ircConn, channelID string, content string) {
+	c.recentlySentMessages[channelID] = append(c.recentlySentMessages[channelID], content)
 }
 
-func isRecentlySentMessage(user *ircConn, message *discordgo.Message) bool {
-	if message.Author == nil || user.guildSession.selfUser == nil {
+func isRecentlySentMessage(c *ircConn, m *discordgo.Message) bool {
+	if c.user.supportedCapabilities["echo-message"] {
 		return false
 	}
-	if user.guildSession.selfUser.ID != message.Author.ID {
+	if m.Author == nil || c.guildSession.selfUser == nil {
 		return false
 	}
-	if recentlySentMessages, exists := user.recentlySentMessages[message.ChannelID]; exists {
+	if c.guildSession.selfUser.ID != m.Author.ID {
+		return false
+	}
+	if recentlySentMessages, exists := c.recentlySentMessages[m.ChannelID]; exists {
 		for index, recentMessage := range recentlySentMessages {
-			if message.Content == recentMessage && recentMessage != "" {
-				user.recentlySentMessages[message.ChannelID][index] = "" // remove the message from recently sent
+			if m.Content == recentMessage && recentMessage != "" {
+				c.recentlySentMessages[m.ChannelID][index] = "" // remove the message from recently sent
 				return true
 			}
 		}
@@ -38,21 +41,19 @@ func isRecentlySentMessage(user *ircConn, message *discordgo.Message) bool {
 	return false
 }
 
-func convertIRCMentionsToDiscord(user *ircConn, message string) (content string) {
+func convertIRCMentionsToDiscord(c *ircConn, message string) (content string) {
 	// TODO: allow chained mentions (`user1: user2: `)
 	startMessageMentionRegex := regexp.MustCompile(`^([^:]+):\ `)
 	matches := startMessageMentionRegex.FindAllStringSubmatchIndex(message, -1)
 	if len(matches) == 0 {
 		return message
 	}
-	discordID := user.guildSession.userMap.GetSnowflake(message[matches[0][2]:matches[0][3]])
+	discordID := c.guildSession.userMap.GetSnowflake(message[matches[0][2]:matches[0][3]])
 	if discordID != "" {
 		return "<@" + discordID + "> " + message[matches[0][1]:]
 	}
 	return message
 }
-
-func (g *guildSession) sendMessageFromDiscordToIRC(message *discordgo.Message) {}
 
 func sendMessageFromDiscordToIRC(date time.Time, c *ircConn, m *discordgo.Message, prefixString string, batchTag string) {
 	ircChannel := c.guildSession.channelMap.GetName(m.ChannelID)

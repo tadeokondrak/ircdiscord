@@ -115,7 +115,7 @@ func (c *ircConn) sendPONG(message string) (err error) {
 }
 
 func (c *ircConn) sendPRIVMSG(tags irc.Tags, nick string, realname string, hostname string, target string, content string) (err error) {
-	if content = "" {
+	if content == "" {
 		content = " "
 	}
 	_tags := irc.Tags{}

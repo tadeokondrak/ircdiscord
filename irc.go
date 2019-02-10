@@ -83,7 +83,7 @@ var (
 	patternUnderline     = regexp.MustCompile(`_{2}([^_].*)_{2}`)
 	patternItalic2       = regexp.MustCompile(`_([^_].*)_`)
 	patternSpoiler       = regexp.MustCompile(`\|{2}([^|].*)\|{2}`)
-	patternSmallCode     = regexp.MustCompile(`\x60([^\x60].*)\x60`)
+	patternSmallCode     = regexp.MustCompile(`\x60([^\x60]*)\x60`)
 	patternStrikethrough = regexp.MustCompile(`~{2}([^~].*)~{2}`)
 )
 

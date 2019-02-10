@@ -53,9 +53,6 @@ func newDiscordSession(token string) (session *discordgo.Session, err error) {
 		return nil, err
 	}
 
-	discordSessionsMutex.Lock()
-	discordSessions[token] = session
-	discordSessionsMutex.Unlock()
 	return session, nil
 }
 
@@ -145,7 +142,6 @@ func getGuildSession(token string, guildID string) (session *guildSession, err e
 // if guildID is empty, will return guildSession for DM server
 func newGuildSession(token string, guildID string) (session *guildSession, err error) {
 	discordSessionsMutex.Lock()
-	defer discordSessionsMutex.Unlock()
 	discordSession, exists := discordSessions[token]
 	if !exists {
 		discordSession, err = newDiscordSession(token)
@@ -153,6 +149,7 @@ func newGuildSession(token string, guildID string) (session *guildSession, err e
 			return nil, err
 		}
 	}
+	discordSessionsMutex.Unlock()
 
 	var guild *discordgo.Guild
 	var sessionType guildSessionType

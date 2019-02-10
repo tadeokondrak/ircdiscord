@@ -351,7 +351,7 @@ func (c *ircConn) handleNAMES(m *irc.Message) {
 }
 
 func (c *ircConn) handleLIST(m *irc.Message) {
-	if len(m.Params) > 0 {
+	if len(m.Params) > 0 && m.Params[0] != "" {
 		// TODO
 		return
 	}

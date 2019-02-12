@@ -78,13 +78,13 @@ var (
 	patternNicks         = regexp.MustCompile("<@![^>]*>")
 	patternRoles         = regexp.MustCompile("<@&[^>]*>")
 	patternEmoji         = regexp.MustCompile("<:[^>]*:[^>]*>")
-	patternBold          = regexp.MustCompile(`\*{2}([^*].*)\*{2}`)
-	patternItalic1       = regexp.MustCompile(`\*([^*].*)\*`)
-	patternUnderline     = regexp.MustCompile(`_{2}([^_].*)_{2}`)
-	patternItalic2       = regexp.MustCompile(`_([^_].*)_`)
-	patternSpoiler       = regexp.MustCompile(`\|{2}([^|].*)\|{2}`)
-	patternSmallCode     = regexp.MustCompile(`\x60([^\x60]*)\x60`)
-	patternStrikethrough = regexp.MustCompile(`~{2}([^~].*)~{2}`)
+	//patternBold          = regexp.MustCompile(`\*{2}([^*].*)\*{2}`)
+	//patternItalic1       = regexp.MustCompile(`\*([^*].*)\*`)
+	//patternUnderline     = regexp.MustCompile(`_{2}([^_].*)_{2}`)
+	//patternItalic2       = regexp.MustCompile(`_([^_].*)_`)
+	//patternSpoiler       = regexp.MustCompile(`\|{2}([^|].*)\|{2}`)
+	//patternSmallCode     = regexp.MustCompile(`\x60([^\x60]*)\x60`)
+	//patternStrikethrough = regexp.MustCompile(`~{2}([^~].*)~{2}`)
 )
 
 func convertDiscordContentToIRC(text string, c *ircConn) (content string) {
@@ -153,33 +153,33 @@ func convertDiscordContentToIRC(text string, c *ircConn) (content string) {
 		return fmt.Sprintf("\x0305:%s:\x03", strings.Split(match[2:len(match)-1], ":")[0])
 	})
 
-	content = patternBold.ReplaceAllStringFunc(content, func(match string) string {
-		return fmt.Sprintf("\x02%s\x02", match[2:len(match)-2])
-	})
+	// content = patternBold.ReplaceAllStringFunc(content, func(match string) string {
+	// 	return fmt.Sprintf("\x02%s\x02", match[2:len(match)-2])
+	// })
 
-	content = patternItalic1.ReplaceAllStringFunc(content, func(match string) string {
-		return fmt.Sprintf("\x1d%s\x1d", match[1:len(match)-1])
-	})
+	// content = patternItalic1.ReplaceAllStringFunc(content, func(match string) string {
+	// 	return fmt.Sprintf("\x1d%s\x1d", match[1:len(match)-1])
+	// })
 
-	content = patternUnderline.ReplaceAllStringFunc(content, func(match string) string {
-		return fmt.Sprintf("\x1f%s\x1f", match[2:len(match)-2])
-	})
+	// content = patternUnderline.ReplaceAllStringFunc(content, func(match string) string {
+	// 	return fmt.Sprintf("\x1f%s\x1f", match[2:len(match)-2])
+	// })
 
-	content = patternItalic2.ReplaceAllStringFunc(content, func(match string) string {
-		return fmt.Sprintf("\x1d%s\x1d", match[1:len(match)-1])
-	})
+	// content = patternItalic2.ReplaceAllStringFunc(content, func(match string) string {
+	// 	return fmt.Sprintf("\x1d%s\x1d", match[1:len(match)-1])
+	// })
 
-	content = patternSpoiler.ReplaceAllStringFunc(content, func(match string) string {
-		return fmt.Sprintf("\x0301,01%s\x03", match[2:len(match)-2])
-	})
+	// content = patternSpoiler.ReplaceAllStringFunc(content, func(match string) string {
+	// 	return fmt.Sprintf("\x0301,01%s\x03", match[2:len(match)-2])
+	// })
 
-	content = patternSmallCode.ReplaceAllStringFunc(content, func(match string) string {
-		return fmt.Sprintf("\x11%s\x11", match[1:len(match)-1])
-	})
+	// content = patternSmallCode.ReplaceAllStringFunc(content, func(match string) string {
+	// 	return fmt.Sprintf("\x11%s\x11", match[1:len(match)-1])
+	// })
 
-	content = patternStrikethrough.ReplaceAllStringFunc(content, func(match string) string {
-		return fmt.Sprintf("\x1e%s\x1e", match[2:len(match)-2])
-	})
+	// content = patternStrikethrough.ReplaceAllStringFunc(content, func(match string) string {
+	// 	return fmt.Sprintf("\x1e%s\x1e", match[2:len(match)-2])
+	// })
 
 	return
 }

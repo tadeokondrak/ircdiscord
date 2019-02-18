@@ -6,10 +6,10 @@ An IRCd that lets you talk to Discord users. It essentially is an IRC server tha
 
 # Capabilities
 Listed below are current features.
--/whois gives information on discord users
--DM support
--Talk in any server/channel
--/list lists all channels in server
+- /whois gives information on discord users
+- DM support
+- Talk in any server/channel
+- /list lists all channels in server
 
 # Installation
 Build with `go build` and then copy into your $PATH. You can also grab a prebuilt binary above.

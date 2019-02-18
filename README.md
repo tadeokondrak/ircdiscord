@@ -2,7 +2,14 @@
 
 [![CircleCI](https://circleci.com/gh/tadeokondrak/IRCdiscord/tree/master.svg?style=svg)](https://circleci.com/gh/tadeokondrak/IRCdiscord/tree/master) [![Discord](https://img.shields.io/discord/541500289430192150.svg?logo=discord&style=flat-square)](https://discord.gg/TeJbfad)
 
-An IRCd that lets you talk to Discord users.
+An IRCd that lets you talk to Discord users. It essentially is an IRC server that connects to Discord to relay messages between your IRC client and Discord.
+
+# Capabilities
+Listed below are current features.
+-/whois gives information on discord users
+-DM support
+-Talk in any server/channel
+-/list lists all channels in server
 
 # Installation
 Build with `go build` and then copy into your $PATH. You can also grab a prebuilt binary above.

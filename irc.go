@@ -46,22 +46,9 @@ func convertDiscordUsernameToIRCRealname(name string) string {
 }
 
 func getIRCNick(name string) (nick string) {
-	// if user != nil {
-	// if member.Nick != "" {
-	// name = member.Nick
-	// } else {
-	// name = member.User.Username
-	// }
-	// }
-
 	re := regexp.MustCompile(`[^A-Za-z0-9\-[\]\\\x60\{\}]+`)
 	nick = underscoreIfEmpty(re.ReplaceAllString(name, ""))
 
-	// // must not start with number
-	// r, _ := utf8.DecodeRuneInString(nick)
-	// if r > '0' && r < '9' {
-	// 	return "_" + nick
-	// }
 	return nick
 }
 
@@ -73,11 +60,11 @@ func convertDiscordTopicToIRC(discordContent string, c *ircConn) (ircContent str
 }
 
 var (
-	patternChannels      = regexp.MustCompile("<#[^>]*>")
-	patternUsers         = regexp.MustCompile("<@[^>]*>")
-	patternNicks         = regexp.MustCompile("<@![^>]*>")
-	patternRoles         = regexp.MustCompile("<@&[^>]*>")
-	patternEmoji         = regexp.MustCompile("<:[^>]*:[^>]*>")
+	patternChannels = regexp.MustCompile("<#[^>]*>")
+	patternUsers    = regexp.MustCompile("<@[^>]*>")
+	patternNicks    = regexp.MustCompile("<@![^>]*>")
+	patternRoles    = regexp.MustCompile("<@&[^>]*>")
+	patternEmoji    = regexp.MustCompile("<a?:[^>]*:[^>]*>")
 	//patternBold          = regexp.MustCompile(`\*{2}([^*].*)\*{2}`)
 	//patternItalic1       = regexp.MustCompile(`\*([^*].*)\*`)
 	//patternUnderline     = regexp.MustCompile(`_{2}([^_].*)_{2}`)
@@ -188,7 +175,10 @@ func convertDiscordMessageToIRC(m *discordgo.Message, c *ircConn) (ircContent st
 	// TODO: check if edited and put (edited) with low contrast
 	ircContent = m.Content
 	for _, attachment := range m.Attachments {
-		ircContent += "\n" + attachment.URL
+		if ircContent != "" {
+			ircContent += "\n"
+		}
+		ircContent += attachment.URL
 	}
 	ircContent = convertDiscordContentToIRC(ircContent, c)
 	return

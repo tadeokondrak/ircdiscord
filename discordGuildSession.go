@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -362,6 +363,12 @@ func (g *guildSession) addUser(user *discordgo.User) (name string) {
 	g.users[user.ID] = user
 	g.usersMutex.Unlock()
 	member, err := g.getMember(user.ID)
+	if note, ok := g.session.State.Notes[user.ID]; ok {
+		kv := strings.Split(strings.Split(note, "\n")[0], ": ")
+		if len(kv) == 2 && kv[0] == "nick" {
+			return g.userMap.Add(getIRCNick(kv[1]), user.ID)
+		}
+	}
 	if member != nil && err == nil && member.Nick != "" {
 		return g.userMap.Add(getIRCNick(member.Nick), user.ID)
 	}

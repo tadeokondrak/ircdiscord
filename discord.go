@@ -92,8 +92,10 @@ func isValidDiscordNick(nick string) bool {
 }
 
 func convertIRCMessageToDiscord(user *ircConn, ircMessage string) (discordMessage string) {
+	actionRegex := regexp.MustCompile(`^\x01ACTION (.*)\x01$`)
 	discordMessage = ircMessage
 	discordMessage = strings.TrimSpace(discordMessage)
+	discordMessage = actionRegex.ReplaceAllString(discordMessage, `*$1*`)
 	discordMessage = convertIRCMentionsToDiscord(user, discordMessage)
 	return discordMessage
 }

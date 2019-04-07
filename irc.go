@@ -137,7 +137,7 @@ func convertDiscordContentToIRC(text string, c *ircConn) (content string) {
 	})
 
 	content = patternEmoji.ReplaceAllStringFunc(content, func(match string) string {
-		return fmt.Sprintf("\x0305:%s:\x03", strings.Split(match[2:len(match)-1], ":")[0])
+		return fmt.Sprintf("\x0305:%s:\x03", match[strings.Index(match, ":") + 1 : strings.LastIndex(match, ":")])
 	})
 
 	// content = patternBold.ReplaceAllStringFunc(content, func(match string) string {

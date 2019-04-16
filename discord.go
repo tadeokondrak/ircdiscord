@@ -57,6 +57,13 @@ func convertIRCMentionsToDiscord(c *ircConn, message string) (content string) {
 }
 
 func sendMessageFromDiscordToIRC(date time.Time, c *ircConn, m *discordgo.Message, prefixString string, batchTag string) {
+	// ignore blocked messages
+	for _, r := range c.session.State.Relationships {
+		if m.Author.ID == r.User.ID && r.Type == 2 {
+			return
+		}
+	}
+
 	ircChannel := c.guildSession.channelMap.GetName(m.ChannelID)
 	c.channelsMutex.Lock()
 	if c.guildSession.guildSessionType == guildSessionGuild && !c.channels[m.ChannelID] {

@@ -44,7 +44,7 @@ func isRecentlySentMessage(c *ircConn, m *discordgo.Message) bool {
 
 func convertIRCMentionsToDiscord(c *ircConn, message string) (content string) {
 	// TODO: allow chained mentions (`user1: user2: `)
-	startMessageMentionRegex := regexp.MustCompile(`^([^:]+):`)
+	startMessageMentionRegex := regexp.MustCompile(`^([^:]+): ?`)
 	matches := startMessageMentionRegex.FindAllStringSubmatchIndex(message, -1)
 	if len(matches) == 0 {
 		return message

@@ -111,8 +111,13 @@ func (c *ircConn) register() (err error) {
 		c.close()
 		return
 	}
-	
-	guildName := strings.Replace(c.guildSession.guild.Name, " ", "-", -1)
+
+	var guildName string
+	if c.guildSession.guild != nil {
+		guildName = strings.Replace(c.guildSession.guild.Name, " ", "-", -1)
+	} else {
+		guildName = "DiscordDMs"
+	}
 
 	c.sendNICK("", "", "", nick)
 

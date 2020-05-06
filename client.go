@@ -161,33 +161,39 @@ func (c *Client) HandleIRCJoin(msg *irc.Message) error {
 	if len(msg.Params) != 1 {
 		return fmt.Errorf("invalid parameter count for JOIN")
 	}
-	if !strings.HasPrefix(msg.Params[0], "#") {
-		return fmt.Errorf("invalid channel name")
-	}
-	name := msg.Params[0][1:]
-	if c.guild == nil {
-		return fmt.Errorf("JOIN for non-guilds is currently unimplemented")
-	}
-	channels, err := c.session.Channels(c.guild.ID)
-	if err != nil {
-		return err
-	}
-	var found *discord.Channel
-	for _, channel := range channels {
-		if channel.Name == name {
-			found = &channel
-			break
+	for _, name := range strings.Split(msg.Params[0], ",") {
+		if !strings.HasPrefix(name, "#") {
+			return fmt.Errorf("invalid channel name")
+		}
+		name = name[1:]
+		if c.guild == nil {
+			return fmt.Errorf("JOIN for non-guilds is currently unimplemented")
+		}
+		channels, err := c.session.Channels(c.guild.ID)
+		if err != nil {
+			return err
+		}
+		var found *discord.Channel
+		for _, channel := range channels {
+			if channel.Name == name {
+				found = &channel
+				break
+			}
+		}
+		if found == nil {
+			return fmt.Errorf("unknown channel %s", name)
+		}
+		c.subscribedChannels[found.ID] = name
+		err = c.irc.Encode(&irc.Message{
+			Prefix:  &c.clientPrefix,
+			Command: irc.JOIN,
+			Params:  []string{fmt.Sprintf("#%s", name)},
+		})
+		if err != nil {
+			return err
 		}
 	}
-	if found == nil {
-		return fmt.Errorf("unknown channel")
-	}
-	c.subscribedChannels[found.ID] = name
-	return c.irc.Encode(&irc.Message{
-		Prefix:  &c.clientPrefix,
-		Command: irc.JOIN,
-		Params:  []string{fmt.Sprintf("#%s", name)},
-	})
+	return nil
 }
 
 func (c *Client) HandleIRCPrivmsg(msg *irc.Message) error {
@@ -197,17 +203,18 @@ func (c *Client) HandleIRCPrivmsg(msg *irc.Message) error {
 	if !strings.HasPrefix(msg.Params[0], "#") {
 		return fmt.Errorf("invalid channel name")
 	}
+	name := msg.Params[0][1:]
 	var id discord.Snowflake
 	var channel string
 	var found bool
 	for id, channel = range c.subscribedChannels {
-		if channel == msg.Params[0][1:] {
+		if channel == name {
 			found = true
 			break
 		}
 	}
 	if !found {
-		return fmt.Errorf("unknown channel")
+		return fmt.Errorf("unknown channel %s", name)
 	}
 	dmsg, err := c.session.SendMessage(id, msg.Params[1], nil)
 	if err != nil {
@@ -220,20 +227,20 @@ func (c *Client) HandleIRCPrivmsg(msg *irc.Message) error {
 func (c *Client) HandleDiscordEvent(e gateway.Event) error {
 	switch e := e.(type) {
 	case *gateway.MessageCreateEvent:
-		if name, ok := c.subscribedChannels[e.ChannelID]; ok {
-			if e.ID == c.lastMessageID {
-				return nil
-			}
-			return c.irc.Encode(&irc.Message{
-				Prefix: &irc.Prefix{
-					User: e.Author.Username,
-					Name: e.Author.Username,
-					Host: e.Author.ID.String(),
-				},
-				Command: irc.PRIVMSG,
-				Params:  []string{fmt.Sprintf("#%s", name), e.Content},
-			})
+		name, ok := c.subscribedChannels[e.ChannelID]
+		if !ok || e.ID == c.lastMessageID {
+			return nil
 		}
+		return c.irc.Encode(&irc.Message{
+			Prefix: &irc.Prefix{
+				User: e.Author.Username,
+				Name: e.Author.Username,
+				Host: e.Author.ID.String(),
+			},
+			Command: irc.PRIVMSG,
+			Params:  []string{fmt.Sprintf("#%s", name), e.Content},
+		})
+
 	}
 	return nil
 }

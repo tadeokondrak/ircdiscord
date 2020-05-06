@@ -141,17 +141,11 @@ func (c *Client) DecodeChan() (<-chan *irc.Message, <-chan error) {
 func (c *Client) HandleIRCMessage(msg *irc.Message) error {
 	switch msg.Command {
 	case irc.PING:
-		if err := c.HandleIRCPing(msg); err != nil {
-			return err
-		}
+		return c.HandleIRCPing(msg)
 	case irc.JOIN:
-		if err := c.HandleIRCJoin(msg); err != nil {
-			return err
-		}
+		return c.HandleIRCJoin(msg)
 	case irc.PRIVMSG:
-		if err := c.HandleIRCPrivmsg(msg); err != nil {
-			return err
-		}
+		return c.HandleIRCPrivmsg(msg)
 	}
 	return nil
 }

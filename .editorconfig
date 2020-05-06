@@ -6,4 +6,8 @@ insert_final_newline = true
 
 [*.go]
 indent_style = tab
+<<<<<<< HEAD
 indent_size = 4
+=======
+indent_size = 8
+>>>>>>> 1449264... rewrite

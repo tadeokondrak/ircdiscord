@@ -1,8 +1,9 @@
-module github.com/tadeokondrak/IRCdiscord
+module github.com/tadeokondrak/ircdiscord
+
+go 1.14
 
 require (
-	github.com/bwmarrin/discordgo v0.19.0
-	github.com/dustin/go-humanize v1.0.0
-	github.com/google/uuid v1.1.1
-	github.com/tadeokondrak/irc v0.0.0-20190206220122-0b0ea71e5b7a
+	github.com/diamondburned/arikawa v0.6.1
+	golang.org/x/net v0.0.0-20200506145744-7e3656a0809f // indirect
+	gopkg.in/sorcix/irc.v2 v2.0.0-20190306112350-8d7a73540b90
 )

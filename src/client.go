@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/gateway"
 	"github.com/tadeokondrak/ircdiscord/src/session"
 	"gopkg.in/sorcix/irc.v2"
 )
@@ -74,6 +75,9 @@ initial_loop:
 				if err != nil {
 					return err
 				}
+				c.session.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
+					GuildID: guild.ID,
+				})
 				c.guild = guild
 			}
 			break initial_loop

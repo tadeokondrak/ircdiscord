@@ -16,8 +16,8 @@ func (c *Client) handleDiscordEvent(e gateway.Event) error {
 		}
 		return c.irc.Encode(&irc.Message{
 			Prefix: &irc.Prefix{
-				User: e.Author.Username,
-				Name: e.Author.Username,
+				User: irc(e.Author.Username),
+				Name: irc(e.Author.Username),
 				Host: e.Author.ID.String(),
 			},
 			Command: irc.PRIVMSG,

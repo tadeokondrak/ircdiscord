@@ -1,6 +1,8 @@
 ircdiscord
 ----------
 
+Build command: go build ./cmd/ircdiscord
+
 Run the binary and connect to the IRC server with the password
 <discord token>:<discord server id>
 

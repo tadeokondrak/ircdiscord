@@ -7,13 +7,14 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/tadeokondrak/ircdiscord/src/session"
 	"gopkg.in/sorcix/irc.v2"
 )
 
 type Client struct {
 	conn               net.Conn
 	irc                *irc.Conn
-	session            *Session
+	session            *session.Session
 	guild              *discord.Guild
 	subscribedChannels map[discord.Snowflake]string
 	serverPrefix       irc.Prefix
@@ -59,7 +60,7 @@ initial_loop:
 				return fmt.Errorf("invalid parameter count for PASS")
 			}
 			args := strings.SplitN(msg.Params[0], ":", 2)
-			session, err := GetSession(args[0])
+			session, err := session.Get(args[0])
 			if err != nil {
 				return err
 			}
@@ -119,11 +120,11 @@ initial_loop:
 	for {
 		select {
 		case msg := <-msgs:
-			if err := c.HandleIRCMessage(msg); err != nil {
+			if err := c.handleIRCMessage(msg); err != nil {
 				return err
 			}
 		case event := <-events:
-			if err := c.HandleDiscordEvent(event); err != nil {
+			if err := c.handleDiscordEvent(event); err != nil {
 				return err
 			}
 		case err := <-errors:

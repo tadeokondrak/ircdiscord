@@ -8,27 +8,27 @@ import (
 	"gopkg.in/sorcix/irc.v2"
 )
 
-func (c *Client) HandleIRCMessage(msg *irc.Message) error {
+func (c *Client) handleIRCMessage(msg *irc.Message) error {
 	switch msg.Command {
 	case irc.PING:
-		return c.HandleIRCPing(msg)
+		return c.handleIRCPing(msg)
 	case irc.JOIN:
-		return c.HandleIRCJoin(msg)
+		return c.handleIRCJoin(msg)
 	case irc.PRIVMSG:
-		return c.HandleIRCPrivmsg(msg)
+		return c.handleIRCPrivmsg(msg)
 	default:
 		return nil
 	}
 }
 
-func (c *Client) HandleIRCPing(msg *irc.Message) error {
+func (c *Client) handleIRCPing(msg *irc.Message) error {
 	return c.irc.Encode(&irc.Message{
 		Command: irc.PONG,
 		Params:  msg.Params,
 	})
 }
 
-func (c *Client) HandleIRCJoin(msg *irc.Message) error {
+func (c *Client) handleIRCJoin(msg *irc.Message) error {
 	if len(msg.Params) != 1 {
 		return fmt.Errorf("invalid parameter count for JOIN")
 	}
@@ -67,7 +67,7 @@ func (c *Client) HandleIRCJoin(msg *irc.Message) error {
 	return nil
 }
 
-func (c *Client) HandleIRCPrivmsg(msg *irc.Message) error {
+func (c *Client) handleIRCPrivmsg(msg *irc.Message) error {
 	if len(msg.Params) < 2 {
 		return fmt.Errorf("not enough parameters for PRIVMSG")
 	}

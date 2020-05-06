@@ -1,4 +1,4 @@
-package ircdiscord
+package session
 
 import (
 	"sync"
@@ -21,7 +21,7 @@ var (
 	sessionLock sync.Mutex
 )
 
-func GetSession(token string) (*Session, error) {
+func Get(token string) (*Session, error) {
 	sessionLock.Lock()
 	defer sessionLock.Unlock()
 

@@ -7,7 +7,7 @@ import (
 	"gopkg.in/sorcix/irc.v2"
 )
 
-func (c *Client) HandleDiscordEvent(e gateway.Event) error {
+func (c *Client) handleDiscordEvent(e gateway.Event) error {
 	switch e := e.(type) {
 	case *gateway.MessageCreateEvent:
 		name, ok := c.subscribedChannels[e.ChannelID]

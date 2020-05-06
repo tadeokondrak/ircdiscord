@@ -1,0 +1,8 @@
+ircdiscord
+----------
+
+Run the binary and connect to the IRC server with the password
+<discord token>:<discord server id>
+
+Multiple simultaneous connections are supported, and will share the
+same Discord websocket connection.

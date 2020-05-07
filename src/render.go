@@ -6,11 +6,12 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/ningen/md"
+	"github.com/tadeokondrak/ircdiscord/src/color"
 	"github.com/yuin/goldmark/ast"
 )
 
 func (c *Client) renderContent(source []byte, m *discord.Message) string {
-	parsed := md.ParseWithMessage(source, c.session.Store, m, true)
+	parsed := md.ParseWithMessage(source, c.session.Store, m, false)
 	var s strings.Builder
 	var walker func(n ast.Node, enter bool) (ast.WalkStatus, error)
 	walker = func(n ast.Node, enter bool) (ast.WalkStatus, error) {
@@ -51,7 +52,9 @@ func (c *Client) renderContent(source []byte, m *discord.Message) string {
 			}
 		case *ast.Link:
 			if enter {
-				fmt.Fprintf(&s, "\x0302%s[%s]\x03", n.Title, n.Destination)
+				fmt.Fprintf(&s, "\x0302[\x03")
+			} else {
+				fmt.Fprintf(&s, " \x0302%s]\x03", n.Destination)
 			}
 		case *ast.AutoLink:
 			if enter {
@@ -119,25 +122,35 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 	var s strings.Builder
 	s.WriteString(c.renderContent([]byte(m.Content), m))
 	for _, e := range m.Embeds {
+		var es strings.Builder
 		if e.Title != "" {
-			fmt.Fprintf(&s, "\x02%s\x02", e.Title)
+			fmt.Fprintf(&es, "\x02%s\x02", e.Title)
 			if e.URL != "" {
-				fmt.Fprintf(&s, " \x0302%s\x03", e.URL)
+				fmt.Fprintf(&es, " \x0302%s\x03", e.URL)
 			}
-			s.WriteString("\n")
+			es.WriteString("\n")
 		}
 
 		if e.Description != "" {
-			s.WriteString(c.renderContent([]byte(e.Description), m))
-			s.WriteString("\n")
+			es.WriteString(c.renderContent([]byte(e.Description), m))
+			es.WriteString("\n")
 		}
 
 		for _, f := range e.Fields {
-			fmt.Fprintf(&s, "\x1D%s:\x1D ", f.Name)
+			fmt.Fprintf(&es, "\x1D%s:\x1D ", f.Name)
 			if !f.Inline {
-				s.WriteString("\n")
+				es.WriteString("\n")
 			}
-			s.WriteString(c.renderContent([]byte(e.Description), m))
+			es.WriteString(c.renderContent([]byte(e.Description), m))
+			es.WriteString("\n")
+		}
+		embed := strings.Split(strings.Trim(es.String(), "\n"), "\n")
+		for i, line := range embed {
+			if i == 0 && line == "" {
+				continue
+			}
+			fmt.Fprintf(&s, "\x03%d▌\x03\x02\x02", color.Nearest(e.Color.Uint32()))
+			s.WriteString(line)
 			s.WriteString("\n")
 		}
 	}

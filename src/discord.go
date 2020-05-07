@@ -12,6 +12,9 @@ import (
 )
 
 func (c *Client) renderMessage(m *discord.Message, send func(string) error) error {
+	if m.Type != discord.DefaultMessage {
+		return nil
+	}
 	source := []byte(m.Content)
 	parsed := md.ParseWithMessage(source, c.session.Store, m, true)
 	var s strings.Builder
@@ -20,6 +23,7 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 		case *ast.Document:
 			// intentionally left blank
 		case *ast.Blockquote:
+			// TODO: improve
 			s.WriteString("---\n")
 		case *ast.Paragraph:
 			if !enter {
@@ -62,19 +66,19 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 			case md.AttrMonospace:
 				s.WriteByte(0x11)
 			case md.AttrQuoted:
-				// TODO
+				// not sure what this is
 			}
 		case *md.Emoji:
 			if enter {
-				fmt.Fprintf(&s, "\x02:%s:\x02", n.Name)
+				fmt.Fprintf(&s, "\x0303:%s:\x03", n.Name)
 			}
 		case *md.Mention:
 			if enter {
 				switch {
 				case n.Channel != nil:
-					fmt.Fprintf(&s, "\x0302#%s\x03", n.Channel.Name)
+					fmt.Fprintf(&s, "\x02\x0302#%s\x03\x02", n.Channel.Name)
 				case n.GuildUser != nil:
-					fmt.Fprintf(&s, "\x0302@%s\x03", n.GuildUser.Username)
+					fmt.Fprintf(&s, "\x02\x0302@%s\x03\x02", n.GuildUser.Username)
 				}
 			}
 		case *ast.String:
@@ -94,6 +98,16 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 		}
 		return ast.WalkContinue, nil
 	})
+	for _, a := range m.Attachments {
+		fmt.Fprintf(&s, "\x02%s\x02 (size: %d", a.Filename, a.Size)
+		if a.Width != 0 && a.Height != 0 {
+			fmt.Fprintf(&s, ", %dx%d", a.Width, a.Height)
+		}
+		fmt.Fprintf(&s, "): \x0302%s\x03", a.URL)
+		if a.Proxy != strings.Replace(a.URL, "cdn.discordapp.com", "media.discordapp.net", 1) {
+			fmt.Fprintf(&s, " | \x0302%s\x03", a.Proxy)
+		}
+	}
 	for _, s := range strings.Split(strings.Trim(s.String(), "\n"), "\n") {
 		if err := send(s); err != nil {
 			return err

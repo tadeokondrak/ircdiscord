@@ -8,6 +8,64 @@ import (
 	"gopkg.in/sorcix/irc.v2"
 )
 
+func (c *Client) joinChannel(name string) error {
+	if c.guild == nil {
+		return fmt.Errorf("JOIN for non-guilds is currently unimplemented")
+	}
+
+	channels, err := c.session.Channels(c.guild.ID)
+	if err != nil {
+		return err
+	}
+
+	var found *discord.Channel
+	for _, channel := range channels {
+		if channel.Name == name && channel.Type == discord.GuildText {
+			found = &channel
+			break
+		}
+	}
+
+	if found == nil {
+		return fmt.Errorf("unknown channel %s", name)
+	}
+
+	c.subscribedChannels[found.ID] = name
+
+	err = c.irc.Encode(&irc.Message{
+		Prefix:  &c.clientPrefix,
+		Command: irc.JOIN,
+		Params:  []string{fmt.Sprintf("#%s", name)},
+	})
+	if err != nil {
+		return err
+	}
+
+	if found.Topic != "" {
+		err = c.irc.Encode(&irc.Message{
+			Prefix:  &c.serverPrefix,
+			Command: irc.RPL_TOPIC,
+			Params: []string{
+				c.clientPrefix.Name,
+				fmt.Sprintf("#%s", name),
+				c.renderContent([]byte(found.Topic), nil),
+			},
+		})
+	}
+
+	err = c.irc.Encode(&irc.Message{
+		Prefix:  &c.serverPrefix,
+		Command: "329", // RPL_CREATIONTIME
+		Params: []string{
+			c.clientPrefix.Name,
+			fmt.Sprintf("#%s", name),
+			fmt.Sprint(found.ID.Time().Unix()),
+		},
+	})
+
+	return err
+}
+
 func (c *Client) handleIRCMessage(msg *irc.Message) error {
 	switch msg.Command {
 	case irc.PING:
@@ -36,31 +94,7 @@ func (c *Client) handleIRCJoin(msg *irc.Message) error {
 		if !strings.HasPrefix(name, "#") {
 			return fmt.Errorf("invalid channel name")
 		}
-		name = name[1:]
-		if c.guild == nil {
-			return fmt.Errorf("JOIN for non-guilds is currently unimplemented")
-		}
-		channels, err := c.session.Channels(c.guild.ID)
-		if err != nil {
-			return err
-		}
-		var snowflake discord.Snowflake
-		for _, channel := range channels {
-			if channel.Name == name && channel.Type == discord.GuildText {
-				snowflake = channel.ID
-				break
-			}
-		}
-		if !snowflake.Valid() {
-			return fmt.Errorf("unknown channel %s", name)
-		}
-		c.subscribedChannels[snowflake] = name
-		err = c.irc.Encode(&irc.Message{
-			Prefix:  &c.clientPrefix,
-			Command: irc.JOIN,
-			Params:  []string{fmt.Sprintf("#%s", name)},
-		})
-		if err != nil {
+		if err := c.joinChannel(name[1:]); err != nil {
 			return err
 		}
 	}

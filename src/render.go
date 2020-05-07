@@ -9,7 +9,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 )
 
-func (c *Client) renderContent(source []byte, m *discord.Message) (string, error) {
+func (c *Client) renderContent(source []byte, m *discord.Message) string {
 	parsed := md.ParseWithMessage(source, c.session.Store, m, true)
 	var s strings.Builder
 	var walker func(n ast.Node, enter bool) (ast.WalkStatus, error)
@@ -108,11 +108,8 @@ func (c *Client) renderContent(source []byte, m *discord.Message) (string, error
 		}
 		return ast.WalkContinue, nil
 	}
-	err := ast.Walk(parsed, walker)
-	if err != nil {
-		return "", err
-	}
-	return s.String(), nil
+	ast.Walk(parsed, walker)
+	return s.String()
 }
 
 func (c *Client) renderMessage(m *discord.Message, send func(string) error) error {
@@ -120,11 +117,7 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 		return nil
 	}
 	var s strings.Builder
-	content, err := c.renderContent([]byte(m.Content), m)
-	if err != nil {
-		return err
-	}
-	s.WriteString(content)
+	s.WriteString(c.renderContent([]byte(m.Content), m))
 	for _, e := range m.Embeds {
 		if e.Title != "" {
 			fmt.Fprintf(&s, "\x02%s\x02", e.Title)
@@ -135,11 +128,7 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 		}
 
 		if e.Description != "" {
-			content, err := c.renderContent([]byte(e.Description), m)
-			if err != nil {
-				return err
-			}
-			s.WriteString(content)
+			s.WriteString(c.renderContent([]byte(e.Description), m))
 			s.WriteString("\n")
 		}
 
@@ -148,11 +137,7 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 			if !f.Inline {
 				s.WriteString("\n")
 			}
-			content, err := c.renderContent([]byte(f.Value), m)
-			if err != nil {
-				return err
-			}
-			s.WriteString(content)
+			s.WriteString(c.renderContent([]byte(e.Description), m))
 			s.WriteString("\n")
 		}
 	}
@@ -171,5 +156,5 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 			return err
 		}
 	}
-	return err
+	return nil
 }

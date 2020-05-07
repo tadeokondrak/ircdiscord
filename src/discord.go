@@ -13,12 +13,12 @@ import (
 
 func (c *Client) renderMessage(m *discord.Message, send func(string) error) error {
 	source := []byte(m.Content)
-	parsed := md.ParseWithMessage(source, c.session.Store, m, false)
+	parsed := md.ParseWithMessage(source, c.session.Store, m, true)
 	var s strings.Builder
 	err := ast.Walk(parsed, func(n ast.Node, enter bool) (ast.WalkStatus, error) {
 		switch n := n.(type) {
 		case *ast.Document:
-			// noop
+			// intentionally left blank
 		case *ast.Blockquote:
 			s.WriteString("---\n")
 		case *ast.Paragraph:
@@ -27,34 +27,54 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 			}
 		case *ast.FencedCodeBlock:
 			if enter {
-				// Write the body
+				s.WriteByte(0x11)
 				for i := 0; i < n.Lines().Len(); i++ {
 					line := n.Lines().At(i)
-					s.WriteString("▏▕  " + string(line.Value(source)))
+					s.WriteString("\x0314>\x03 ")
+					s.Write(line.Value(source))
 				}
+				s.WriteByte(0x11)
 			}
 		case *ast.Link:
 			if enter {
-				s.WriteString(string(n.Title) + " (" + string(n.Destination) + ")")
+				fmt.Fprintf(&s, "\x0302%s[%s]\x03", n.Title, n.Destination)
 			}
 		case *ast.AutoLink:
 			if enter {
-				s.WriteString(string(n.URL(source)))
+				fmt.Fprintf(&s, "\x0302%s\x03", n.URL(source))
 			}
 		case *md.Inline:
-			// n.Attr should be used, but since we're in plaintext mode, there is no
-			// formatting.
+			switch n.Attr {
+			case md.AttrBold:
+				s.WriteByte(0x02)
+			case md.AttrItalics:
+				s.WriteByte(0x1D)
+			case md.AttrUnderline:
+				s.WriteByte(0x1F)
+			case md.AttrStrikethrough:
+				s.WriteByte(0x1E)
+			case md.AttrSpoiler:
+				if enter {
+					s.WriteString("\x0300,00")
+				} else {
+					s.WriteString("\x03")
+				}
+			case md.AttrMonospace:
+				s.WriteByte(0x11)
+			case md.AttrQuoted:
+				// TODO
+			}
 		case *md.Emoji:
 			if enter {
-				s.WriteString(":" + string(n.Name) + ":")
+				fmt.Fprintf(&s, "\x02:%s:\x02", n.Name)
 			}
 		case *md.Mention:
 			if enter {
 				switch {
 				case n.Channel != nil:
-					s.WriteString("#" + n.Channel.Name)
+					fmt.Fprintf(&s, "\x0302#%s\x03", n.Channel.Name)
 				case n.GuildUser != nil:
-					s.WriteString("@" + n.GuildUser.Username)
+					fmt.Fprintf(&s, "\x0302@%s\x03", n.GuildUser.Username)
 				}
 			}
 		case *ast.String:

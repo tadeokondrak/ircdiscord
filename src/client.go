@@ -20,7 +20,7 @@ type Client struct {
 	subscribedChannels map[discord.Snowflake]string
 	serverPrefix       irc.Prefix
 	clientPrefix       irc.Prefix
-	lastMessageID      discord.Snowflake
+	lastMessageID      discord.Snowflake // the ID of the last message this client sent
 }
 
 func NewClient(conn net.Conn) *Client {

@@ -1,11 +1,14 @@
 package ircdiscord
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/ningen/md"
+	"github.com/sourcegraph/syntaxhighlight"
 	"github.com/tadeokondrak/ircdiscord/src/color"
 	"github.com/yuin/goldmark/ast"
 )
@@ -39,14 +42,26 @@ func (c *Client) renderContent(source []byte, m *discord.Message) string {
 			}
 		case *ast.FencedCodeBlock:
 			if enter {
-				s.WriteByte(0x11)
+				var content bytes.Buffer
 				for i := 0; i < n.Lines().Len(); i++ {
 					line := n.Lines().At(i)
 					if i == 0 && len(line.Value(source)) == 0 {
 						continue
 					}
+					content.Write(line.Value(source))
+
+				}
+				scanner := syntaxhighlight.NewScanner(content.Bytes())
+				var highlighted strings.Builder
+				syntaxhighlight.Print(scanner, &highlighted, ircPrinter{})
+				s.WriteByte(0x11)
+				for i, line := range strings.Split(strings.Trim(highlighted.String(), "\n"), "\n") {
+					if i == 0 && line == "" {
+						continue
+					}
 					s.WriteString("\x0314>\x03 ")
-					s.Write(line.Value(source))
+					s.WriteString(line)
+					s.WriteString("\n")
 				}
 				s.WriteByte(0x11)
 			}
@@ -168,6 +183,53 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 		if err := send(s); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+type ircPrinter struct{}
+
+func (ircPrinter) Print(w io.Writer, kind syntaxhighlight.Kind, tokText string) error {
+	var err error
+	switch kind {
+	case syntaxhighlight.String:
+		_, err = io.WriteString(w, "\x0309")
+	case syntaxhighlight.Keyword:
+		_, err = io.WriteString(w, "\x0304")
+	case syntaxhighlight.Comment:
+		_, err = io.WriteString(w, "\x0314")
+	case syntaxhighlight.Type:
+		_, err = io.WriteString(w, "\x0310")
+	case syntaxhighlight.Literal:
+		_, err = io.WriteString(w, "\x0307")
+	case syntaxhighlight.Punctuation:
+		_, err = io.WriteString(w, "\x0308")
+	case syntaxhighlight.Plaintext:
+		_, err = io.WriteString(w, "\x0300")
+	case syntaxhighlight.Tag:
+		_, err = io.WriteString(w, "\x0300")
+	case syntaxhighlight.HTMLTag:
+		_, err = io.WriteString(w, "\x0304")
+	case syntaxhighlight.HTMLAttrName:
+		_, err = io.WriteString(w, "\x0300")
+	case syntaxhighlight.HTMLAttrValue:
+		_, err = io.WriteString(w, "\x0309")
+	case syntaxhighlight.Decimal:
+		_, err = io.WriteString(w, "\x0307")
+	default:
+		_, err = io.WriteString(w, "\x0300")
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "\x02\x02"); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, tokText); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "\x03"); err != nil {
+		return err
 	}
 	return nil
 }

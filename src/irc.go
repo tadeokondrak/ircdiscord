@@ -66,6 +66,25 @@ func (c *Client) joinChannel(name string) error {
 	return err
 }
 
+func (c *Client) sendMessage(channel, content string) error {
+	var found *discord.Snowflake
+	for id, name := range c.subscribedChannels {
+		if name == channel {
+			found = &id
+			break
+		}
+	}
+	if found == nil {
+		return fmt.Errorf("unknown channel %s", channel)
+	}
+	msg, err := c.session.SendMessage(*found, content, nil)
+	if err != nil {
+		return err
+	}
+	c.lastMessageID = msg.ID
+	return nil
+}
+
 func (c *Client) handleIRCMessage(msg *irc.Message) error {
 	switch msg.Command {
 	case "PING":
@@ -108,23 +127,5 @@ func (c *Client) handleIRCPrivmsg(msg *irc.Message) error {
 	if !strings.HasPrefix(msg.Params[0], "#") {
 		return fmt.Errorf("invalid channel name")
 	}
-	name := msg.Params[0][1:]
-	var id discord.Snowflake
-	var channel string
-	var found bool
-	for id, channel = range c.subscribedChannels {
-		if channel == name {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return fmt.Errorf("unknown channel %s", name)
-	}
-	dmsg, err := c.session.SendMessage(id, msg.Params[1], nil)
-	if err != nil {
-		return err
-	}
-	c.lastMessageID = dmsg.ID
-	return nil
+	return c.sendMessage(msg.Params[0][1:], msg.Params[1])
 }

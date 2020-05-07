@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/diamondburned/arikawa/gateway"
-	"gopkg.in/sorcix/irc.v2"
+	"gopkg.in/irc.v3"
 )
 
 func (c *Client) handleDiscordEvent(e gateway.Event) error {
@@ -22,13 +22,13 @@ func (c *Client) handleDiscordMessageCreate(e *gateway.MessageCreateEvent) error
 		return nil
 	}
 	return c.renderMessage(&e.Message, func(s string) error {
-		return c.irc.Encode(&irc.Message{
+		return c.irc.WriteMessage(&irc.Message{
 			Prefix: &irc.Prefix{
 				User: ircUsername(e.Author.Username),
 				Name: ircUsername(e.Author.Username),
 				Host: e.Author.ID.String(),
 			},
-			Command: irc.PRIVMSG,
+			Command: "PRIVMSG",
 			Params:  []string{fmt.Sprintf("#%s", name), s},
 		})
 	})

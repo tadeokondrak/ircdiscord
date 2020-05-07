@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
-	"gopkg.in/sorcix/irc.v2"
+	"gopkg.in/irc.v3"
 )
 
 func (c *Client) joinChannel(name string) error {
@@ -32,9 +32,9 @@ func (c *Client) joinChannel(name string) error {
 
 	c.subscribedChannels[found.ID] = name
 
-	err = c.irc.Encode(&irc.Message{
+	err = c.irc.WriteMessage(&irc.Message{
 		Prefix:  &c.clientPrefix,
-		Command: irc.JOIN,
+		Command: "JOIN",
 		Params:  []string{fmt.Sprintf("#%s", name)},
 	})
 	if err != nil {
@@ -42,7 +42,7 @@ func (c *Client) joinChannel(name string) error {
 	}
 
 	if found.Topic != "" {
-		err = c.irc.Encode(&irc.Message{
+		err = c.irc.WriteMessage(&irc.Message{
 			Prefix:  &c.serverPrefix,
 			Command: irc.RPL_TOPIC,
 			Params: []string{
@@ -53,7 +53,7 @@ func (c *Client) joinChannel(name string) error {
 		})
 	}
 
-	err = c.irc.Encode(&irc.Message{
+	err = c.irc.WriteMessage(&irc.Message{
 		Prefix:  &c.serverPrefix,
 		Command: "329", // RPL_CREATIONTIME
 		Params: []string{
@@ -68,11 +68,11 @@ func (c *Client) joinChannel(name string) error {
 
 func (c *Client) handleIRCMessage(msg *irc.Message) error {
 	switch msg.Command {
-	case irc.PING:
+	case "PING":
 		return c.handleIRCPing(msg)
-	case irc.JOIN:
+	case "JOIN":
 		return c.handleIRCJoin(msg)
-	case irc.PRIVMSG:
+	case "PRIVMSG":
 		return c.handleIRCPrivmsg(msg)
 	default:
 		return nil
@@ -80,8 +80,8 @@ func (c *Client) handleIRCMessage(msg *irc.Message) error {
 }
 
 func (c *Client) handleIRCPing(msg *irc.Message) error {
-	return c.irc.Encode(&irc.Message{
-		Command: irc.PONG,
+	return c.irc.WriteMessage(&irc.Message{
+		Command: "PONG",
 		Params:  msg.Params,
 	})
 }

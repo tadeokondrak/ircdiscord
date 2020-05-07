@@ -9,7 +9,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/tadeokondrak/ircdiscord/src/session"
-	"gopkg.in/sorcix/irc.v2"
+	"gopkg.in/irc.v3"
 )
 
 type Client struct {
@@ -35,7 +35,7 @@ func (c *Client) Close() error {
 	if c.session != nil {
 		c.session.Unref()
 	}
-	return c.irc.Close()
+	return c.conn.Close()
 }
 
 func (c *Client) Run() error {
@@ -49,14 +49,14 @@ func (c *Client) Run() error {
 
 initial_loop:
 	for {
-		msg, err := c.irc.Decode()
+		msg, err := c.irc.ReadMessage()
 		if err != nil {
 			return err
 		}
 		switch msg.Command {
-		case irc.CAP, irc.NICK, irc.USER:
+		case "CAP", "NICK", "USER":
 			// intentionally left blank
-		case irc.PASS:
+		case "PASS":
 			if len(msg.Params) != 1 {
 				return fmt.Errorf("invalid parameter count for PASS")
 			}
@@ -106,7 +106,7 @@ initial_loop:
 	errors := make(chan error)
 	go func() {
 		for {
-			msg, err := c.irc.Decode()
+			msg, err := c.irc.ReadMessage()
 			if err != nil {
 				errors <- err
 				return
@@ -140,7 +140,7 @@ func (c *Client) sendGreeting() error {
 		return err
 	}
 
-	if err := c.irc.Encode(&irc.Message{
+	if err := c.irc.WriteMessage(&irc.Message{
 		Prefix:  &c.serverPrefix,
 		Command: irc.RPL_WELCOME,
 		Params: []string{c.clientPrefix.Name, fmt.Sprintf("Welcome to %s, %s#%s",
@@ -149,7 +149,7 @@ func (c *Client) sendGreeting() error {
 		return err
 	}
 
-	if err := c.irc.Encode(&irc.Message{
+	if err := c.irc.WriteMessage(&irc.Message{
 		Prefix:  &c.serverPrefix,
 		Command: irc.RPL_YOURHOST,
 		Params: []string{c.clientPrefix.Name,
@@ -158,7 +158,7 @@ func (c *Client) sendGreeting() error {
 		return err
 	}
 
-	if err := c.irc.Encode(&irc.Message{
+	if err := c.irc.WriteMessage(&irc.Message{
 		Prefix:  &c.serverPrefix,
 		Command: irc.RPL_CREATED,
 		Params: []string{c.clientPrefix.Name,

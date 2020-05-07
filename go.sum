@@ -1,9 +1,11 @@
 github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
+github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/diamondburned/arikawa v0.6.2 h1:8dfaLNaaSGqVtl6xEDyGCjJa6bLVrMzLsPVjj0k4VsQ=
 github.com/diamondburned/arikawa v0.6.2/go.mod h1:nIhVIatzTQhPUa7NB8w4koG1RF9gYbpAr8Fj8sKq660=
-github.com/diamondburned/ningen v0.0.0-20200507173528-30caba153567 h1:y2siL1j7E7x0zjlLyEmIbhk0pacfVVZajVXM+0xReVU=
-github.com/diamondburned/ningen v0.0.0-20200507173528-30caba153567/go.mod h1:lJY41Fswu0gbYihY0ADjvCOB6vq6gbB/eutOPmdVdZQ=
+github.com/diamondburned/ningen v0.0.0-20200507195319-daa04385686b h1:dmhW1imm9kfM80fA4x8cn9hsF1F9J9owvE1dSleS9tE=
+github.com/diamondburned/ningen v0.0.0-20200507195319-daa04385686b/go.mod h1:lJY41Fswu0gbYihY0ADjvCOB6vq6gbB/eutOPmdVdZQ=
 github.com/gorilla/schema v1.1.0 h1:CamqUDOFUBqzrvxuz2vEwo8+SUdwsluFh7IlzJh30LY=
 github.com/gorilla/schema v1.1.0/go.mod h1:kgLaKoK1FELgZqMAVxx/5cbj0kT+57qxUrAlIO2eleU=
 github.com/gorilla/websocket v1.4.2 h1:+/TMaTYc4QFitKJxsQ7Yye35DkWvkdLcvGKqM+x0Ufc=

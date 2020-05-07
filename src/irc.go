@@ -53,7 +53,7 @@ func (c *Client) joinChannel(name string) error {
 		})
 	}
 
-	err = c.irc.WriteMessage(&irc.Message{
+	if err := c.irc.WriteMessage(&irc.Message{
 		Prefix:  &c.serverPrefix,
 		Command: "329", // RPL_CREATIONTIME
 		Params: []string{
@@ -61,7 +61,16 @@ func (c *Client) joinChannel(name string) error {
 			fmt.Sprintf("#%s", name),
 			fmt.Sprint(found.ID.Time().Unix()),
 		},
-	})
+	}); err != nil {
+		return err
+	}
+
+	backlog, err := c.session.Messages(found.ID)
+	for i := len(backlog) - 1; i >= 0; i-- {
+		if err := c.sendDiscordMessage(&backlog[i]); err != nil {
+			return err
+		}
+	}
 
 	return err
 }

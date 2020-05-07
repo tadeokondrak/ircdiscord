@@ -98,7 +98,31 @@ initial_loop:
 		Host: me.ID.String(),
 	}
 
-	if err := c.sendGreeting(); err != nil {
+	err = c.irc.Encode(&irc.Message{
+		Prefix:  &c.serverPrefix,
+		Command: irc.RPL_WELCOME,
+		Params: []string{c.clientPrefix.Name, fmt.Sprintf("Welcome to %s, %s#%s",
+			c.guild.Name, me.Username, me.Discriminator)},
+	})
+	if err != nil {
+		return err
+	}
+
+	err = c.irc.Encode(&irc.Message{
+		Prefix:  &c.serverPrefix,
+		Command: irc.RPL_YOURHOST,
+		Params:  []string{c.clientPrefix.Name, fmt.Sprintf("Your host is %s, running ircdiscord", c.serverPrefix.Name)},
+	})
+	if err != nil {
+		return err
+	}
+	
+	err = c.irc.Encode(&irc.Message{
+		Prefix:  &c.serverPrefix,
+		Command: irc.RPL_YOURHOST,
+		Params:  []string{c.clientPrefix.Name, fmt.Sprintf("Your host is %s, running ircdiscord", c.serverPrefix.Name)},
+	})
+	if err != nil {
 		return err
 	}
 
@@ -132,40 +156,4 @@ initial_loop:
 			return err
 		}
 	}
-}
-
-func (c *Client) sendGreeting() error {
-	me, err := c.session.Me()
-	if err != nil {
-		return err
-	}
-
-	if err := c.irc.Encode(&irc.Message{
-		Prefix:  &c.serverPrefix,
-		Command: irc.RPL_WELCOME,
-		Params: []string{c.clientPrefix.Name, fmt.Sprintf("Welcome to %s, %s#%s",
-			c.guild.Name, me.Username, me.Discriminator)},
-	}); err != nil {
-		return err
-	}
-
-	if err := c.irc.Encode(&irc.Message{
-		Prefix:  &c.serverPrefix,
-		Command: irc.RPL_YOURHOST,
-		Params: []string{c.clientPrefix.Name,
-			fmt.Sprintf("Your host is %s, running ircdiscord", c.serverPrefix.Name)},
-	}); err != nil {
-		return err
-	}
-
-	if err := c.irc.Encode(&irc.Message{
-		Prefix:  &c.serverPrefix,
-		Command: irc.RPL_CREATED,
-		Params: []string{c.clientPrefix.Name,
-			fmt.Sprintf("This server was created %s", c.guild.ID.Time().String())},
-	}); err != nil {
-		return err
-	}
-
-	return nil
 }

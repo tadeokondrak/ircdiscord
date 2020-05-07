@@ -5,7 +5,7 @@ import (
 	"unicode"
 )
 
-func ircClean(s string) string {
+func ircUsername(s string) string {
 	var b strings.Builder
 	for _, c := range s {
 		if !unicode.IsSpace(c) && unicode.IsGraphic(c) {

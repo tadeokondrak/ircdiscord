@@ -24,8 +24,8 @@ func (c *Client) handleDiscordMessageCreate(e *gateway.MessageCreateEvent) error
 	return c.renderMessage(&e.Message, func(s string) error {
 		return c.irc.Encode(&irc.Message{
 			Prefix: &irc.Prefix{
-				User: ircClean(e.Author.Username),
-				Name: ircClean(e.Author.Username),
+				User: ircUsername(e.Author.Username),
+				Name: ircUsername(e.Author.Username),
 				Host: e.Author.ID.String(),
 			},
 			Command: irc.PRIVMSG,

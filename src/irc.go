@@ -44,16 +44,14 @@ func (c *Client) handleIRCJoin(msg *irc.Message) error {
 		if err != nil {
 			return err
 		}
-		var found bool
 		var snowflake discord.Snowflake
 		for _, channel := range channels {
-			if channel.Name == name {
-				found = true
+			if channel.Name == name && channel.Type == discord.GuildText {
 				snowflake = channel.ID
 				break
 			}
 		}
-		if !found {
+		if !snowflake.Valid() {
 			return fmt.Errorf("unknown channel %s", name)
 		}
 		c.subscribedChannels[snowflake] = name

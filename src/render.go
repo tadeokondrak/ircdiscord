@@ -12,13 +12,26 @@ import (
 func (c *Client) renderContent(source []byte, m *discord.Message) (string, error) {
 	parsed := md.ParseWithMessage(source, c.session.Store, m, true)
 	var s strings.Builder
-	err := ast.Walk(parsed, func(n ast.Node, enter bool) (ast.WalkStatus, error) {
+	var walker func(n ast.Node, enter bool) (ast.WalkStatus, error)
+	walker = func(n ast.Node, enter bool) (ast.WalkStatus, error) {
 		switch n := n.(type) {
 		case *ast.Document:
 			// intentionally left blank
 		case *ast.Blockquote:
-			// TODO: improve
-			s.WriteString("---\n")
+			if enter {
+				for child := n.FirstChild(); child != nil; child = child.NextSibling() {
+					s.WriteString("\x0309>\x03 ")
+					ast.Walk(child, func(node ast.Node, enter bool) (ast.WalkStatus, error) {
+						// We only call when entering, since we don't want to trigger a
+						// hard new line after each paragraph.
+						if enter {
+							walker(node, true)
+						}
+						return ast.WalkContinue, nil
+					})
+				}
+				return ast.WalkSkipChildren, nil
+			}
 		case *ast.Paragraph:
 			if !enter {
 				s.WriteString("\n")
@@ -94,7 +107,8 @@ func (c *Client) renderContent(source []byte, m *discord.Message) (string, error
 			}
 		}
 		return ast.WalkContinue, nil
-	})
+	}
+	err := ast.Walk(parsed, walker)
 	if err != nil {
 		return "", err
 	}

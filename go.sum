@@ -1,7 +1,7 @@
 github.com/diamondburned/arikawa v0.6.2 h1:8dfaLNaaSGqVtl6xEDyGCjJa6bLVrMzLsPVjj0k4VsQ=
 github.com/diamondburned/arikawa v0.6.2/go.mod h1:nIhVIatzTQhPUa7NB8w4koG1RF9gYbpAr8Fj8sKq660=
-github.com/diamondburned/ningen v0.0.0-20200507004410-9d66deb885f3 h1:Or/yiu6x4uFSrXQISTX4zNj/TfYDYaEDOOBzeHoTxtE=
-github.com/diamondburned/ningen v0.0.0-20200507004410-9d66deb885f3/go.mod h1:lJY41Fswu0gbYihY0ADjvCOB6vq6gbB/eutOPmdVdZQ=
+github.com/diamondburned/ningen v0.0.0-20200507173528-30caba153567 h1:y2siL1j7E7x0zjlLyEmIbhk0pacfVVZajVXM+0xReVU=
+github.com/diamondburned/ningen v0.0.0-20200507173528-30caba153567/go.mod h1:lJY41Fswu0gbYihY0ADjvCOB6vq6gbB/eutOPmdVdZQ=
 github.com/gorilla/schema v1.1.0 h1:CamqUDOFUBqzrvxuz2vEwo8+SUdwsluFh7IlzJh30LY=
 github.com/gorilla/schema v1.1.0/go.mod h1:kgLaKoK1FELgZqMAVxx/5cbj0kT+57qxUrAlIO2eleU=
 github.com/gorilla/websocket v1.4.2 h1:+/TMaTYc4QFitKJxsQ7Yye35DkWvkdLcvGKqM+x0Ufc=

@@ -8,6 +8,14 @@ import (
 	"gopkg.in/irc.v3"
 )
 
+func discordUserPrefix(u *discord.User) *irc.Prefix {
+	return &irc.Prefix{
+		User: ircUsername(u.Username),
+		Name: ircUsername(u.Username),
+		Host: u.ID.String(),
+	}
+}
+
 func (c *Client) sendDiscordMessage(m *discord.Message) error {
 	channel, ok := c.subscribedChannels[m.ChannelID]
 	if !ok {
@@ -18,11 +26,7 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 			s = " "
 		}
 		return c.irc.WriteMessage(&irc.Message{
-			Prefix: &irc.Prefix{
-				User: ircUsername(m.Author.Username),
-				Name: ircUsername(m.Author.Username),
-				Host: m.Author.ID.String(),
-			},
+			Prefix:  discordUserPrefix(&m.Author),
 			Command: "PRIVMSG",
 			Params:  []string{fmt.Sprintf("#%s", channel), s},
 		})

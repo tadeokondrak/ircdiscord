@@ -92,11 +92,7 @@ initial_loop:
 		return err
 	}
 
-	c.clientPrefix = irc.Prefix{
-		User: me.Username,
-		Name: me.Username,
-		Host: me.ID.String(),
-	}
+	c.clientPrefix = *discordUserPrefix(me)
 
 	if err := c.sendGreeting(); err != nil {
 		return err
@@ -104,6 +100,7 @@ initial_loop:
 
 	msgs := make(chan *irc.Message)
 	errors := make(chan error)
+
 	go func() {
 		for {
 			msg, err := c.irc.ReadMessage()

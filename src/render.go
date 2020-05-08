@@ -156,7 +156,7 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 			if !f.Inline {
 				es.WriteString("\n")
 			}
-			es.WriteString(c.renderContent([]byte(e.Description), m))
+			es.WriteString(c.renderContent([]byte(f.Value), m))
 			es.WriteString("\n")
 		}
 		embed := strings.Split(strings.Trim(es.String(), "\n"), "\n")
@@ -190,46 +190,37 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 type ircPrinter struct{}
 
 func (ircPrinter) Print(w io.Writer, kind syntaxhighlight.Kind, tokText string) error {
-	var err error
+	// we ignore errors since we're always printing into a buffer
 	switch kind {
 	case syntaxhighlight.String:
-		_, err = io.WriteString(w, "\x0309")
+		io.WriteString(w, "\x0309")
 	case syntaxhighlight.Keyword:
-		_, err = io.WriteString(w, "\x0304")
+		io.WriteString(w, "\x0304")
 	case syntaxhighlight.Comment:
-		_, err = io.WriteString(w, "\x0314")
+		io.WriteString(w, "\x0314")
 	case syntaxhighlight.Type:
-		_, err = io.WriteString(w, "\x0310")
+		io.WriteString(w, "\x0310")
 	case syntaxhighlight.Literal:
-		_, err = io.WriteString(w, "\x0307")
+		io.WriteString(w, "\x0307")
 	case syntaxhighlight.Punctuation:
-		_, err = io.WriteString(w, "\x0308")
+		io.WriteString(w, "\x0308")
 	case syntaxhighlight.Plaintext:
-		_, err = io.WriteString(w, "\x0300")
+		io.WriteString(w, "\x0300")
 	case syntaxhighlight.Tag:
-		_, err = io.WriteString(w, "\x0300")
+		io.WriteString(w, "\x0300")
 	case syntaxhighlight.HTMLTag:
-		_, err = io.WriteString(w, "\x0304")
+		io.WriteString(w, "\x0304")
 	case syntaxhighlight.HTMLAttrName:
-		_, err = io.WriteString(w, "\x0300")
+		io.WriteString(w, "\x0300")
 	case syntaxhighlight.HTMLAttrValue:
-		_, err = io.WriteString(w, "\x0309")
+		io.WriteString(w, "\x0309")
 	case syntaxhighlight.Decimal:
-		_, err = io.WriteString(w, "\x0307")
+		io.WriteString(w, "\x0307")
 	default:
-		_, err = io.WriteString(w, "\x0300")
+		io.WriteString(w, "\x0300")
 	}
-	if err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, "\x02\x02"); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, tokText); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, "\x03"); err != nil {
-		return err
-	}
+	io.WriteString(w, "\x02\x02")
+	io.WriteString(w, tokText)
+	io.WriteString(w, "\x03")
 	return nil
 }

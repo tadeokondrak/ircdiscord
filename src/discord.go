@@ -14,6 +14,9 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 		return nil
 	}
 	return c.renderMessage(m, func(s string) error {
+		if s == "" {
+			s = " "
+		}
 		return c.irc.WriteMessage(&irc.Message{
 			Prefix: &irc.Prefix{
 				User: ircUsername(m.Author.Username),

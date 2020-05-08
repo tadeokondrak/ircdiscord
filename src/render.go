@@ -14,7 +14,7 @@ import (
 )
 
 func (c *Client) renderContent(source []byte, m *discord.Message) string {
-	parsed := md.ParseWithMessage(source, c.session.Store, m, false)
+	parsed := md.ParseWithMessage(source, c.session, m, false)
 	var s strings.Builder
 	var walker func(n ast.Node, enter bool) (ast.WalkStatus, error)
 	walker = func(n ast.Node, enter bool) (ast.WalkStatus, error) {
@@ -176,7 +176,7 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 		}
 		fmt.Fprintf(&s, "): \x0302%s\x03", a.URL)
 		if a.Proxy != strings.Replace(a.URL, "cdn.discordapp.com", "media.discordapp.net", 1) {
-			fmt.Fprintf(&s, " | \x0302%s\x03", a.Proxy)
+			fmt.Fprintf(&s, " | \x0302%s\x03\n", a.Proxy)
 		}
 	}
 	for _, s := range strings.Split(strings.Trim(s.String(), "\n"), "\n") {

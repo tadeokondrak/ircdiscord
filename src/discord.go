@@ -22,9 +22,6 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 		return nil
 	}
 	return c.renderMessage(m, func(s string) error {
-		if s == "" {
-			s = " "
-		}
 		return c.irc.WriteMessage(&irc.Message{
 			Prefix:  discordUserPrefix(&m.Author),
 			Command: "PRIVMSG",

@@ -45,6 +45,9 @@ func (c *Client) renderContent(source []byte, m *discord.Message) string {
 			}
 		case *ast.Paragraph:
 			if !enter {
+				if m != nil && m.EditedTimestamp.Valid() {
+					s.WriteString("\x0315 (edited)\x03")
+				}
 				s.WriteString("\n")
 			}
 		case *ast.FencedCodeBlock:

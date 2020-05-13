@@ -14,13 +14,6 @@ import (
 )
 
 func (c *Client) renderContent(source []byte, m *discord.Message) string {
-	defer func() {
-		if err := recover(); err != nil {
-			fmt.Println("panicked parsing markdown:")
-			fmt.Println(string(source))
-			fmt.Println(err)
-		}
-	}()
 	parsed := md.ParseWithMessage(source, c.session, m, false)
 	var s strings.Builder
 	var walker func(n ast.Node, enter bool) (ast.WalkStatus, error)

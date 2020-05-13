@@ -33,15 +33,17 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 func (c *Client) handleDiscordEvent(e gateway.Event) error {
 	switch e := e.(type) {
 	case *gateway.MessageCreateEvent:
-		return c.handleDiscordMessageCreate(e)
+		return c.handleDiscordMessage(e.Message)
+	case *gateway.MessageUpdateEvent:
+		return c.handleDiscordMessage(e.Message)
 	default:
 		return nil
 	}
 }
 
-func (c *Client) handleDiscordMessageCreate(e *gateway.MessageCreateEvent) error {
-	if e.ID == c.lastMessageID {
+func (c *Client) handleDiscordMessage(m discord.Message) error {
+	if m.ID == c.lastMessageID {
 		return nil
 	}
-	return c.sendDiscordMessage(&e.Message)
+	return c.sendDiscordMessage(&m)
 }

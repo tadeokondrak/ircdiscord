@@ -137,11 +137,18 @@ func (c *Client) sendGreeting() error {
 		return err
 	}
 
+	guildName := "Discord"
+	guildID := me.ID
+	if c.guild != nil {
+		guildName = c.guild.Name
+		guildID = c.guild.ID
+	}
+
 	if err := c.irc.WriteMessage(&irc.Message{
 		Prefix:  &c.serverPrefix,
 		Command: irc.RPL_WELCOME,
 		Params: []string{c.clientPrefix.Name, fmt.Sprintf("Welcome to %s, %s#%s",
-			c.guild.Name, me.Username, me.Discriminator)},
+			guildName, me.Username, me.Discriminator)},
 	}); err != nil {
 		return err
 	}
@@ -159,7 +166,7 @@ func (c *Client) sendGreeting() error {
 		Prefix:  &c.serverPrefix,
 		Command: irc.RPL_CREATED,
 		Params: []string{c.clientPrefix.Name,
-			fmt.Sprintf("This server was created %s", c.guild.ID.Time().String())},
+			fmt.Sprintf("This server was created %s", guildID.Time().String())},
 	}); err != nil {
 		return err
 	}

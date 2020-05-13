@@ -6,11 +6,17 @@ import (
 )
 
 func ircUsername(s string) string {
-	var b strings.Builder
-	for _, c := range s {
-		if !unicode.IsSpace(c) && unicode.IsGraphic(c) {
-			b.WriteRune(c)
-		}
-	}
-	return b.String()
+	return strings.Map(
+		func(r rune) rune {
+			if unicode.IsLetter(r) ||
+				unicode.IsNumber(r) {
+				return r
+			}
+			switch r {
+			case '_', '-', '{', '}', '[', ']', '\\', '`', '|':
+				return r
+			}
+			return -1
+		},
+		s)
 }

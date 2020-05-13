@@ -82,7 +82,7 @@ initial_loop:
 			}
 			break initial_loop
 		default:
-			return fmt.Errorf("invalid command received for auth stage: %v",
+			return fmt.Errorf("invalid command received in authentication stage: %v",
 				msg.Command)
 		}
 	}

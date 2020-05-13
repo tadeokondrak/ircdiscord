@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net"
 
@@ -8,6 +9,12 @@ import (
 )
 
 func main() {
+	var (
+		debug bool
+	)
+	flag.BoolVar(&debug, "debug", false, "enable debug logging")
+	flag.Parse()
+
 	log.SetFlags(0)
 	listener, err := net.Listen("tcp", ":6667")
 	if err != nil {
@@ -22,6 +29,7 @@ func main() {
 		}
 		go func() {
 			client := ircdiscord.NewClient(conn)
+			client.Debug = debug
 			if err := client.Run(); err != nil {
 				log.Println(err)
 			}

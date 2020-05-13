@@ -21,6 +21,7 @@ type Client struct {
 	serverPrefix       irc.Prefix
 	clientPrefix       irc.Prefix
 	lastMessageID      discord.Snowflake // the ID of the last message this client sent
+	Debug              bool
 }
 
 func NewClient(conn net.Conn) *Client {
@@ -38,6 +39,21 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
+func (c *Client) WriteMessage(m *irc.Message) error {
+	if c.Debug {
+		log.Printf("-> %s", m)
+	}
+	return c.irc.WriteMessage(m)
+}
+
+func (c *Client) ReadMessage() (*irc.Message, error) {
+	m, err := c.irc.ReadMessage()
+	if c.Debug && err != nil {
+		log.Printf("<- %s", m)
+	}
+	return m, err
+}
+
 func (c *Client) Run() error {
 	defer c.Close()
 
@@ -49,7 +65,7 @@ func (c *Client) Run() error {
 
 initial_loop:
 	for {
-		msg, err := c.irc.ReadMessage()
+		msg, err := c.ReadMessage()
 		if err != nil {
 			return err
 		}
@@ -103,7 +119,7 @@ initial_loop:
 
 	go func() {
 		for {
-			msg, err := c.irc.ReadMessage()
+			msg, err := c.ReadMessage()
 			if err != nil {
 				errors <- err
 				return
@@ -144,7 +160,7 @@ func (c *Client) sendGreeting() error {
 		guildID = c.guild.ID
 	}
 
-	if err := c.irc.WriteMessage(&irc.Message{
+	if err := c.WriteMessage(&irc.Message{
 		Prefix:  &c.serverPrefix,
 		Command: irc.RPL_WELCOME,
 		Params: []string{c.clientPrefix.Name, fmt.Sprintf("Welcome to %s, %s#%s",
@@ -153,7 +169,7 @@ func (c *Client) sendGreeting() error {
 		return err
 	}
 
-	if err := c.irc.WriteMessage(&irc.Message{
+	if err := c.WriteMessage(&irc.Message{
 		Prefix:  &c.serverPrefix,
 		Command: irc.RPL_YOURHOST,
 		Params: []string{c.clientPrefix.Name,
@@ -162,7 +178,7 @@ func (c *Client) sendGreeting() error {
 		return err
 	}
 
-	if err := c.irc.WriteMessage(&irc.Message{
+	if err := c.WriteMessage(&irc.Message{
 		Prefix:  &c.serverPrefix,
 		Command: irc.RPL_CREATED,
 		Params: []string{c.clientPrefix.Name,

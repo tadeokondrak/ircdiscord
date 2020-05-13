@@ -22,7 +22,7 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 		return nil
 	}
 	return c.renderMessage(m, func(s string) error {
-		return c.irc.WriteMessage(&irc.Message{
+		return c.WriteMessage(&irc.Message{
 			Prefix:  discordUserPrefix(&m.Author),
 			Command: "PRIVMSG",
 			Params:  []string{fmt.Sprintf("#%s", channel), s},

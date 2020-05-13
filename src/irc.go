@@ -32,7 +32,7 @@ func (c *Client) joinChannel(name string) error {
 
 	c.subscribedChannels[found.ID] = name
 
-	err = c.irc.WriteMessage(&irc.Message{
+	err = c.WriteMessage(&irc.Message{
 		Prefix:  &c.clientPrefix,
 		Command: "JOIN",
 		Params:  []string{fmt.Sprintf("#%s", name)},
@@ -42,7 +42,7 @@ func (c *Client) joinChannel(name string) error {
 	}
 
 	if found.Topic != "" {
-		err = c.irc.WriteMessage(&irc.Message{
+		err = c.WriteMessage(&irc.Message{
 			Prefix:  &c.serverPrefix,
 			Command: irc.RPL_TOPIC,
 			Params: []string{
@@ -53,7 +53,7 @@ func (c *Client) joinChannel(name string) error {
 		})
 	}
 
-	if err := c.irc.WriteMessage(&irc.Message{
+	if err := c.WriteMessage(&irc.Message{
 		Prefix:  &c.serverPrefix,
 		Command: "329", // RPL_CREATIONTIME
 		Params: []string{
@@ -108,7 +108,7 @@ func (c *Client) handleIRCMessage(msg *irc.Message) error {
 }
 
 func (c *Client) handleIRCPing(msg *irc.Message) error {
-	return c.irc.WriteMessage(&irc.Message{
+	return c.WriteMessage(&irc.Message{
 		Command: "PONG",
 		Params:  msg.Params,
 	})

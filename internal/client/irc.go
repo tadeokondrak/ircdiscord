@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/tadeokondrak/ircdiscord/render"
+	"github.com/tadeokondrak/ircdiscord/internal/render"
 	"gopkg.in/irc.v3"
 )
 

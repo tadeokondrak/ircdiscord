@@ -7,7 +7,7 @@ import (
 	"log"
 	"net"
 
-	"github.com/tadeokondrak/ircdiscord/client"
+	"github.com/tadeokondrak/ircdiscord/internal/client"
 )
 
 var (

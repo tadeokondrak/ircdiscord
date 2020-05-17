@@ -8,7 +8,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/tadeokondrak/ircdiscord/session"
+	"github.com/tadeokondrak/ircdiscord/internal/session"
 	"gopkg.in/irc.v3"
 )
 

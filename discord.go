@@ -5,7 +5,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
-	"github.com/tadeokondrak/ircdiscord/src/render"
+	"github.com/tadeokondrak/ircdiscord/render"
 	"gopkg.in/irc.v3"
 )
 

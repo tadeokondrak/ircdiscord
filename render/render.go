@@ -9,8 +9,8 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/ningen/md"
 	"github.com/sourcegraph/syntaxhighlight"
-	"github.com/tadeokondrak/ircdiscord/src/color"
-	"github.com/tadeokondrak/ircdiscord/src/session"
+	"github.com/tadeokondrak/ircdiscord/color"
+	"github.com/tadeokondrak/ircdiscord/session"
 	"github.com/yuin/goldmark/ast"
 )
 

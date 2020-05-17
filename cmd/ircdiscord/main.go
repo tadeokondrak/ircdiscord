@@ -7,7 +7,7 @@ import (
 	"log"
 	"net"
 
-	ircdiscord "github.com/tadeokondrak/ircdiscord/src"
+	ircdiscord "github.com/tadeokondrak/ircdiscord"
 )
 
 func main() {

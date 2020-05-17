@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/diamondburned/arikawa/discord"
 )
@@ -11,10 +12,12 @@ import (
 // IDMap is a map between Discord ID/name pairs and IRC names.
 // There may be multiple Discord names with the same name but different IDs,
 // with different IRC names guaranteed by the map.
-// It is not safe to use concurrently from multiple goroutines.
+// It is not safe to use concurrently from multiple goroutines if Concurrent is not set.
 type IDMap struct {
-	forward  map[discord.Snowflake]string
-	backward map[string]discord.Snowflake
+	forward    map[discord.Snowflake]string
+	backward   map[string]discord.Snowflake
+	mu         sync.RWMutex
+	Concurrent bool
 }
 
 // New creates a new IDMap.
@@ -28,6 +31,10 @@ func New() *IDMap {
 // Name returns the IRC name for a Discord ID.
 // It returns the empty string if missing.
 func (m *IDMap) Name(id discord.Snowflake) string {
+	if m.Concurrent {
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+	}
 	if !id.Valid() {
 		panic("invalid ID")
 	}
@@ -40,6 +47,10 @@ func (m *IDMap) Name(id discord.Snowflake) string {
 // Snowflake returns the Discord ID from an IRC name.
 // It returns the null snowflake if missing.
 func (m *IDMap) Snowflake(name string) discord.Snowflake {
+	if m.Concurrent {
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+	}
 	if name == "" {
 		panic("invalid IRC name")
 	}
@@ -54,6 +65,10 @@ func (m *IDMap) Snowflake(name string) discord.Snowflake {
 func (m *IDMap) Insert(id discord.Snowflake, ideal string) string {
 	if name := m.Name(id); name != "" {
 		return name
+	}
+	if m.Concurrent {
+		m.mu.Lock()
+		defer m.mu.Unlock()
 	}
 	name := sanitize(ideal)
 	for {

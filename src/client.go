@@ -56,7 +56,10 @@ func (c *Client) ReadMessage() (*irc.Message, error) {
 	return m, err
 }
 
-var supportedCaps = []string{}
+var supportedCaps = []string{
+	"echo-message",
+}
+
 var supportedCapsString = strings.Join(supportedCaps, " ")
 var supportedCapsSet = func() map[string]struct{} {
 	set := make(map[string]struct{})
@@ -102,16 +105,17 @@ func (c *Client) Run() error {
 				if len(msg.Params) != 2 {
 					return fmt.Errorf("invalid parameter count for CAP REQ")
 				}
-				capability := msg.Params[1]
-				if _, ok := supportedCapsSet[capability]; !ok {
-					return fmt.Errorf("invalid capability requested: %s", capability)
+				for _, capability := range strings.Split(msg.Params[1], " ") {
+					if _, ok := supportedCapsSet[capability]; !ok {
+						return fmt.Errorf("invalid capability requested: %s", capability)
+					}
+					c.caps[capability] = true
 				}
 				c.WriteMessage(&irc.Message{
 					Prefix:  &c.serverPrefix,
 					Command: "CAP",
-					Params:  []string{c.clientPrefix.Name, "ACK", capability},
+					Params:  []string{c.clientPrefix.Name, "ACK", msg.Params[1]},
 				})
-				c.caps[capability] = true
 				blocked = true
 			case "END":
 				blocked = false

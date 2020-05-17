@@ -42,7 +42,7 @@ func (c *Client) handleDiscordEvent(e gateway.Event) error {
 }
 
 func (c *Client) handleDiscordMessage(m discord.Message) error {
-	if m.ID == c.lastMessageID {
+	if m.ID == c.lastMessageID && !c.caps["echo-message"] {
 		return nil
 	}
 	return c.sendDiscordMessage(&m)

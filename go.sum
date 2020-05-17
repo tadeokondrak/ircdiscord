@@ -3,8 +3,8 @@ github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/diamondburned/arikawa v0.8.1/go.mod h1:nIhVIatzTQhPUa7NB8w4koG1RF9gYbpAr8Fj8sKq660=
-github.com/diamondburned/arikawa v0.8.2 h1:XD4tYp/wkRdsAZAtA64r6IZRZk15p1Ke+68hrWa08G8=
-github.com/diamondburned/arikawa v0.8.2/go.mod h1:nIhVIatzTQhPUa7NB8w4koG1RF9gYbpAr8Fj8sKq660=
+github.com/diamondburned/arikawa v0.8.3 h1:DI9C8eoPz9rU2aiosnwnwT5JCwJn5oFKfY4PY62SBLE=
+github.com/diamondburned/arikawa v0.8.3/go.mod h1:nIhVIatzTQhPUa7NB8w4koG1RF9gYbpAr8Fj8sKq660=
 github.com/diamondburned/ningen v0.0.0-20200517065254-f7d4f3208fdc h1:7YWPdYjTGaqQBFNdlHOEGkhRyXhixfLgQia/r8sjjRg=
 github.com/diamondburned/ningen v0.0.0-20200517065254-f7d4f3208fdc/go.mod h1:fcdTzYeRTAu9ecWS6VrGCaIW8h62PR9bO00e1qmUSVg=
 github.com/gorilla/schema v1.1.0 h1:CamqUDOFUBqzrvxuz2vEwo8+SUdwsluFh7IlzJh30LY=

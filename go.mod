@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/diamondburned/arikawa v0.8.2
+	github.com/diamondburned/arikawa v0.8.3
 	github.com/diamondburned/ningen v0.0.0-20200517065254-f7d4f3208fdc
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.0.3

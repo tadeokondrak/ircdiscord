@@ -22,7 +22,7 @@ type Client struct {
 	clientPrefix       irc.Prefix
 	lastMessageID      discord.Snowflake // the ID of the last message this client sent
 	caps               map[string]bool
-	Debug              bool
+	IRCDebug           bool
 }
 
 func New(conn net.Conn) *Client {
@@ -42,7 +42,7 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) WriteMessage(m *irc.Message) error {
-	if c.Debug {
+	if c.IRCDebug {
 		log.Printf("-> %s", m)
 	}
 	return c.irc.WriteMessage(m)
@@ -50,7 +50,7 @@ func (c *Client) WriteMessage(m *irc.Message) error {
 
 func (c *Client) ReadMessage() (*irc.Message, error) {
 	m, err := c.irc.ReadMessage()
-	if c.Debug && err == nil {
+	if c.IRCDebug && err == nil {
 		log.Printf("<- %s", m)
 	}
 	return m, err

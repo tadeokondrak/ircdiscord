@@ -59,6 +59,7 @@ func (c *Client) ReadMessage() (*irc.Message, error) {
 var supportedCaps = []string{
 	"echo-message",
 	"server-time",
+	"message-tags",
 }
 
 var supportedCapsString = strings.Join(supportedCaps, " ")

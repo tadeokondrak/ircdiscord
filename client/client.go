@@ -1,4 +1,4 @@
-package ircdiscord
+package client
 
 import (
 	"fmt"
@@ -25,7 +25,7 @@ type Client struct {
 	Debug              bool
 }
 
-func NewClient(conn net.Conn) *Client {
+func New(conn net.Conn) *Client {
 	return &Client{
 		conn:               conn,
 		irc:                irc.NewConn(conn),

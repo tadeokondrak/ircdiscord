@@ -1,4 +1,4 @@
-package ircdiscord
+package client
 
 import (
 	"fmt"

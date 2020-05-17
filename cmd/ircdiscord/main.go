@@ -7,7 +7,7 @@ import (
 	"log"
 	"net"
 
-	ircdiscord "github.com/tadeokondrak/ircdiscord"
+	"github.com/tadeokondrak/ircdiscord/client"
 )
 
 func main() {
@@ -62,9 +62,9 @@ func main() {
 			log.Fatalf("failed to accept connection: %v", err)
 		}
 		go func() {
-			client := ircdiscord.NewClient(conn)
-			client.Debug = debug
-			if err := client.Run(); err != nil {
+			c := client.New(conn)
+			c.Debug = debug
+			if err := c.Run(); err != nil {
 				log.Println(err)
 			}
 		}()

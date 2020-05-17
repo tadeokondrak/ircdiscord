@@ -2,6 +2,7 @@ package ircdiscord
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -129,6 +130,8 @@ func (c *Client) handleIRCJoin(msg *irc.Message) error {
 	return nil
 }
 
+var actionRegex = regexp.MustCompile(`^\x01ACTION (.*)\x01$`)
+
 func (c *Client) handleIRCPrivmsg(msg *irc.Message) error {
 	if len(msg.Params) < 2 {
 		return fmt.Errorf("not enough parameters for PRIVMSG")
@@ -136,5 +139,7 @@ func (c *Client) handleIRCPrivmsg(msg *irc.Message) error {
 	if !strings.HasPrefix(msg.Params[0], "#") {
 		return fmt.Errorf("invalid channel name")
 	}
-	return c.sendMessage(msg.Params[0][1:], msg.Params[1])
+	text := msg.Params[1]
+	text = actionRegex.ReplaceAllString(text, "*$1*")
+	return c.sendMessage(msg.Params[0][1:], text)
 }

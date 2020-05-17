@@ -8,3 +8,5 @@ Run the binary and connect to the IRC server with the password
 
 Multiple simultaneous connections are supported, and will share the
 same Discord websocket connection.
+
+IRC channel: #ircdiscord on freenode

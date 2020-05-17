@@ -21,6 +21,7 @@ type Client struct {
 	serverPrefix       irc.Prefix
 	clientPrefix       irc.Prefix
 	lastMessageID      discord.Snowflake // the ID of the last message this client sent
+	caps               map[string]bool
 	Debug              bool
 }
 
@@ -29,6 +30,7 @@ func NewClient(conn net.Conn) *Client {
 		conn:               conn,
 		irc:                irc.NewConn(conn),
 		subscribedChannels: make(map[discord.Snowflake]string),
+		caps:               make(map[string]bool),
 	}
 }
 
@@ -54,6 +56,16 @@ func (c *Client) ReadMessage() (*irc.Message, error) {
 	return m, err
 }
 
+var supportedCaps = []string{}
+var supportedCapsString = strings.Join(supportedCaps, " ")
+var supportedCapsSet = func() map[string]struct{} {
+	set := make(map[string]struct{})
+	for _, capability := range supportedCaps {
+		set[capability] = struct{}{}
+	}
+	return set
+}()
+
 func (c *Client) Run() error {
 	defer c.Close()
 
@@ -63,15 +75,47 @@ func (c *Client) Run() error {
 	log.Printf("connected: %v", c.clientPrefix.Name)
 	defer log.Printf("disconnected: %v", c.clientPrefix.Name)
 
-initial_loop:
-	for {
+	passed, nicked, usered, blocked := false, false, false, false
+	for !passed || !nicked || !usered || blocked {
 		msg, err := c.ReadMessage()
 		if err != nil {
 			return err
 		}
 		switch msg.Command {
-		case "CAP", "NICK", "USER":
-			// intentionally left blank
+		case "NICK":
+			nicked = true
+		case "USER":
+			usered = true
+		case "CAP":
+			if len(msg.Params) < 1 {
+				return fmt.Errorf("invalid parameter count for CAP")
+			}
+			switch msg.Params[0] {
+			case "LS":
+				c.WriteMessage(&irc.Message{
+					Prefix:  &c.serverPrefix,
+					Command: "CAP",
+					Params:  []string{c.clientPrefix.Name, "LS", supportedCapsString},
+				})
+				blocked = true
+			case "REQ":
+				if len(msg.Params) != 2 {
+					return fmt.Errorf("invalid parameter count for CAP REQ")
+				}
+				capability := msg.Params[1]
+				if _, ok := supportedCapsSet[capability]; !ok {
+					return fmt.Errorf("invalid capability requested: %s", capability)
+				}
+				c.WriteMessage(&irc.Message{
+					Prefix:  &c.serverPrefix,
+					Command: "CAP",
+					Params:  []string{c.clientPrefix.Name, "ACK", capability},
+				})
+				c.caps[capability] = true
+				blocked = true
+			case "END":
+				blocked = false
+			}
 		case "PASS":
 			if len(msg.Params) != 1 {
 				return fmt.Errorf("invalid parameter count for PASS")
@@ -96,7 +140,7 @@ initial_loop:
 				})
 				c.guild = guild
 			}
-			break initial_loop
+			passed = true
 		default:
 			return fmt.Errorf("invalid command received in authentication stage: %v",
 				msg.Command)

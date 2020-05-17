@@ -58,7 +58,6 @@ func Content(sess *session.Session, source []byte, m *discord.Message) string {
 				scanner := syntaxhighlight.NewScanner(content.Bytes())
 				var highlighted strings.Builder
 				syntaxhighlight.Print(scanner, &highlighted, ircPrinter{})
-				s.WriteByte(0x11)
 				for i, line := range strings.Split(strings.Trim(highlighted.String(), "\n"), "\n") {
 					if i == 0 && line == "" {
 						continue
@@ -67,7 +66,6 @@ func Content(sess *session.Session, source []byte, m *discord.Message) string {
 					s.WriteString(line)
 					s.WriteString("\n")
 				}
-				s.WriteByte(0x11)
 			}
 		case *ast.Link:
 			if enter {
@@ -96,7 +94,11 @@ func Content(sess *session.Session, source []byte, m *discord.Message) string {
 					s.WriteString("\x03")
 				}
 			case md.AttrMonospace:
-				s.WriteByte(0x11)
+				if enter {
+					s.WriteString("\x0314")
+				} else {
+					s.WriteString("\x03")
+				}
 			case md.AttrQuoted:
 				// not sure what this is
 			}

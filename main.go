@@ -10,14 +10,23 @@ import (
 	"github.com/tadeokondrak/ircdiscord/client"
 )
 
+var (
+	debug      bool
+	tlsEnabled bool
+	port       int
+	certfile   string
+	keyfile    string
+)
+
+func runClient(conn net.Conn) {
+	c := client.New(conn)
+	c.Debug = debug
+	if err := c.Run(); err != nil {
+		log.Println(err)
+	}
+}
+
 func main() {
-	var (
-		debug      bool
-		tlsEnabled bool
-		port       int
-		certfile   string
-		keyfile    string
-	)
 	flag.BoolVar(&debug, "debug", false, "enable debug logging")
 	flag.BoolVar(&tlsEnabled, "tls", false, "enable tls encryption")
 	flag.IntVar(&port, "port", 0, "port to run on, defaults to 6667/6697 depending on tls")
@@ -61,12 +70,6 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to accept connection: %v", err)
 		}
-		go func() {
-			c := client.New(conn)
-			c.Debug = debug
-			if err := c.Run(); err != nil {
-				log.Println(err)
-			}
-		}()
+		go runClient(conn)
 	}
 }

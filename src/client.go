@@ -48,7 +48,7 @@ func (c *Client) WriteMessage(m *irc.Message) error {
 
 func (c *Client) ReadMessage() (*irc.Message, error) {
 	m, err := c.irc.ReadMessage()
-	if c.Debug && err != nil {
+	if c.Debug && err == nil {
 		log.Printf("<- %s", m)
 	}
 	return m, err

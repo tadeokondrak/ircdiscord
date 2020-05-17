@@ -43,7 +43,6 @@ func (m *IDMap) Snowflake(name string) discord.Snowflake {
 	if name == "" {
 		panic("invalid IRC name")
 	}
-	name = sanitize(name)
 	if flake, ok := m.backward[name]; ok {
 		return flake
 	}
@@ -63,8 +62,14 @@ func (m *IDMap) Insert(id discord.Snowflake, ideal string) string {
 			name = mangle(name, int64(id))
 			continue
 		}
+		break
 	}
+	m.forward[id] = name
+	m.backward[name] = id
+	return name
 }
+
+// TODO: add Remove
 
 var hashReplacer = strings.NewReplacer("#", "")
 

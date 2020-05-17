@@ -23,16 +23,36 @@ func TestMangle(t *testing.T) {
 	assert(mangle("name#12345##", 12345) == "name#12345###")
 }
 
-func TestIDMap(t *testing.T) {
-	m := New()
+func testIDMap(m *IDMap) {
 	assert(m.Name(discord.Snowflake(12345)) == "")
+
 	assert(m.Insert(discord.Snowflake(12345), "name") == "name")
 	assert(m.Insert(discord.Snowflake(12346), "name") == "name#1")
 	assert(m.Insert(discord.Snowflake(12347), "name") == "name#12")
+
 	assert(m.Name(discord.Snowflake(12345)) == "name")
 	assert(m.Name(discord.Snowflake(12346)) == "name#1")
 	assert(m.Name(discord.Snowflake(12347)) == "name#12")
+
 	assert(m.Snowflake("name") == discord.Snowflake(12345))
 	assert(m.Snowflake("name#1") == discord.Snowflake(12346))
 	assert(m.Snowflake("name#12") == discord.Snowflake(12347))
+
+	m.Delete(discord.Snowflake(12345))
+
+	assert(!m.Snowflake("name").Valid())
+	assert(m.Snowflake("name#1") == discord.Snowflake(12346))
+	assert(m.Snowflake("name#12") == discord.Snowflake(12347))
+
+	assert(m.Insert(discord.Snowflake(12345), "name") == "name")
+	assert(m.Name(discord.Snowflake(12345)) == "name")
+	assert(m.Snowflake("name") == discord.Snowflake(12345))
+}
+
+func TestIDMap(t *testing.T) {
+	m := New()
+	testIDMap(m)
+	m = New()
+	m.Concurrent = true
+	testIDMap(m)
 }

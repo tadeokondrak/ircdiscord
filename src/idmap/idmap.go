@@ -84,7 +84,20 @@ func (m *IDMap) Insert(id discord.Snowflake, ideal string) string {
 	return name
 }
 
-// TODO: add Remove
+func (m *IDMap) Delete(id discord.Snowflake) {
+	name := m.Name(id)
+	if name == "" {
+		// no-op
+		return
+	}
+	if m.Concurrent {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+	}
+	delete(m.forward, id)
+	delete(m.backward, name)
+
+}
 
 var hashReplacer = strings.NewReplacer("#", "")
 

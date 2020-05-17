@@ -1,4 +1,4 @@
-package ircdiscord
+package render
 
 import (
 	"bytes"
@@ -10,11 +10,12 @@ import (
 	"github.com/diamondburned/ningen/md"
 	"github.com/sourcegraph/syntaxhighlight"
 	"github.com/tadeokondrak/ircdiscord/src/color"
+	"github.com/tadeokondrak/ircdiscord/src/session"
 	"github.com/yuin/goldmark/ast"
 )
 
-func (c *Client) renderContent(source []byte, m *discord.Message) string {
-	parsed := md.ParseWithMessage(source, c.session, m, false)
+func Content(sess *session.Session, source []byte, m *discord.Message) string {
+	parsed := md.ParseWithMessage(source, sess, m, false)
 	var s strings.Builder
 	var walker func(n ast.Node, enter bool) (ast.WalkStatus, error)
 	walker = func(n ast.Node, enter bool) (ast.WalkStatus, error) {
@@ -133,12 +134,12 @@ func (c *Client) renderContent(source []byte, m *discord.Message) string {
 	return s.String()
 }
 
-func (c *Client) renderMessage(m *discord.Message, send func(string) error) error {
+func Message(sess *session.Session, m *discord.Message, send func(string) error) error {
 	if m.Type != discord.DefaultMessage {
 		return nil
 	}
 	var s strings.Builder
-	s.WriteString(c.renderContent([]byte(m.Content), m))
+	s.WriteString(Content(sess, []byte(m.Content), m))
 	for _, e := range m.Embeds {
 		var es strings.Builder
 		if e.Title != "" {
@@ -150,7 +151,7 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 		}
 
 		if e.Description != "" {
-			es.WriteString(c.renderContent([]byte(e.Description), m))
+			es.WriteString(Content(sess, []byte(e.Description), m))
 			es.WriteString("\n")
 		}
 
@@ -159,7 +160,7 @@ func (c *Client) renderMessage(m *discord.Message, send func(string) error) erro
 			if !f.Inline {
 				es.WriteString("\n")
 			}
-			es.WriteString(c.renderContent([]byte(f.Value), m))
+			es.WriteString(Content(sess, []byte(f.Value), m))
 			es.WriteString("\n")
 		}
 		embed := strings.Split(strings.Trim(es.String(), "\n"), "\n")

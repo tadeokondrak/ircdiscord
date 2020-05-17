@@ -5,6 +5,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/tadeokondrak/ircdiscord/src/render"
 	"gopkg.in/irc.v3"
 )
 
@@ -25,7 +26,7 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 	if c.caps["server-time"] {
 		tags["time"] = irc.TagValue(m.ID.Time().Format("2006-01-02T15:04:05.000Z"))
 	}
-	return c.renderMessage(m, func(s string) error {
+	return render.Message(c.session, m, func(s string) error {
 		return c.WriteMessage(&irc.Message{
 			Tags:    tags,
 			Prefix:  discordUserPrefix(&m.Author),

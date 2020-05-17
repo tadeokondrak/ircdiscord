@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/tadeokondrak/ircdiscord/src/render"
 	"gopkg.in/irc.v3"
 )
 
@@ -49,7 +50,7 @@ func (c *Client) joinChannel(name string) error {
 			Params: []string{
 				c.clientPrefix.Name,
 				fmt.Sprintf("#%s", name),
-				c.renderContent([]byte(found.Topic), nil),
+				render.Content(c.session, []byte(found.Topic), nil),
 			},
 		})
 	}

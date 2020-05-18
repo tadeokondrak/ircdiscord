@@ -18,8 +18,8 @@ type Client struct {
 	session            *session.Session
 	guild              *discord.Guild
 	subscribedChannels map[discord.Snowflake]string
-	serverPrefix       irc.Prefix
-	clientPrefix       irc.Prefix
+	serverPrefix       *irc.Prefix
+	clientPrefix       *irc.Prefix
 	lastMessageID      discord.Snowflake // the ID of the last message this client sent
 	caps               map[string]bool
 	IRCDebug           bool
@@ -30,6 +30,8 @@ func New(conn net.Conn) *Client {
 		conn:               conn,
 		irc:                irc.NewConn(conn),
 		subscribedChannels: make(map[discord.Snowflake]string),
+		serverPrefix:       &irc.Prefix{Name: conn.LocalAddr().String()},
+		clientPrefix:       &irc.Prefix{Name: conn.RemoteAddr().String()},
 		caps:               make(map[string]bool),
 	}
 }
@@ -61,7 +63,6 @@ var supportedCaps = []string{
 	"server-time",
 	"message-tags",
 }
-
 var supportedCapsString = strings.Join(supportedCaps, " ")
 var supportedCapsSet = func() map[string]struct{} {
 	set := make(map[string]struct{})
@@ -73,9 +74,6 @@ var supportedCapsSet = func() map[string]struct{} {
 
 func (c *Client) Run() error {
 	defer c.Close()
-
-	c.serverPrefix.Name = c.conn.LocalAddr().String()
-	c.clientPrefix.Name = c.conn.RemoteAddr().String()
 
 	log.Printf("connected: %v", c.clientPrefix.Name)
 	defer log.Printf("disconnected: %v", c.clientPrefix.Name)
@@ -98,7 +96,7 @@ func (c *Client) Run() error {
 			switch msg.Params[0] {
 			case "LS":
 				c.WriteMessage(&irc.Message{
-					Prefix:  &c.serverPrefix,
+					Prefix:  c.serverPrefix,
 					Command: "CAP",
 					Params:  []string{c.clientPrefix.Name, "LS", supportedCapsString},
 				})
@@ -114,7 +112,7 @@ func (c *Client) Run() error {
 					c.caps[capability] = true
 				}
 				c.WriteMessage(&irc.Message{
-					Prefix:  &c.serverPrefix,
+					Prefix:  c.serverPrefix,
 					Command: "CAP",
 					Params:  []string{c.clientPrefix.Name, "ACK", msg.Params[1]},
 				})
@@ -158,7 +156,7 @@ func (c *Client) Run() error {
 		return err
 	}
 
-	c.clientPrefix = *discordUserPrefix(me)
+	c.clientPrefix = c.discordUserPrefix(me)
 
 	if err := c.sendGreeting(); err != nil {
 		return err
@@ -211,7 +209,7 @@ func (c *Client) sendGreeting() error {
 	}
 
 	if err := c.WriteMessage(&irc.Message{
-		Prefix:  &c.serverPrefix,
+		Prefix:  c.serverPrefix,
 		Command: irc.RPL_WELCOME,
 		Params: []string{c.clientPrefix.Name, fmt.Sprintf("Welcome to %s, %s#%s",
 			guildName, me.Username, me.Discriminator)},
@@ -220,7 +218,7 @@ func (c *Client) sendGreeting() error {
 	}
 
 	if err := c.WriteMessage(&irc.Message{
-		Prefix:  &c.serverPrefix,
+		Prefix:  c.serverPrefix,
 		Command: irc.RPL_YOURHOST,
 		Params: []string{c.clientPrefix.Name,
 			fmt.Sprintf("Your host is %s, running ircdiscord", c.serverPrefix.Name)},
@@ -229,7 +227,7 @@ func (c *Client) sendGreeting() error {
 	}
 
 	if err := c.WriteMessage(&irc.Message{
-		Prefix:  &c.serverPrefix,
+		Prefix:  c.serverPrefix,
 		Command: irc.RPL_CREATED,
 		Params: []string{c.clientPrefix.Name,
 			fmt.Sprintf("This server was created %s", guildID.Time().String())},

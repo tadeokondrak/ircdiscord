@@ -9,7 +9,7 @@ import (
 	"gopkg.in/irc.v3"
 )
 
-func discordUserPrefix(u *discord.User) *irc.Prefix {
+func (c *Client) discordUserPrefix(u *discord.User) *irc.Prefix {
 	return &irc.Prefix{
 		User: ircUsername(u.Username),
 		Name: ircUsername(u.Username),
@@ -29,7 +29,7 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 	return render.Message(c.session, m, func(s string) error {
 		return c.WriteMessage(&irc.Message{
 			Tags:    tags,
-			Prefix:  discordUserPrefix(&m.Author),
+			Prefix:  c.discordUserPrefix(&m.Author),
 			Command: "PRIVMSG",
 			Params:  []string{fmt.Sprintf("#%s", channel), s},
 		})

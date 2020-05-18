@@ -13,26 +13,26 @@ import (
 )
 
 type Client struct {
-	conn               net.Conn
-	irc                *irc.Conn
-	session            *session.Session
-	guild              *discord.Guild
-	subscribedChannels map[discord.Snowflake]string
-	serverPrefix       *irc.Prefix
-	clientPrefix       *irc.Prefix
-	lastMessageID      discord.Snowflake // the ID of the last message this client sent
-	caps               map[string]bool
-	IRCDebug           bool
+	conn           net.Conn
+	irc            *irc.Conn
+	session        *session.Session
+	guild          *discord.Guild
+	serverPrefix   *irc.Prefix
+	clientPrefix   *irc.Prefix
+	lastMessageID  discord.Snowflake // the ID of the last message this client sent
+	caps           map[string]bool
+	joinedChannels map[discord.Snowflake]bool
+	IRCDebug       bool
 }
 
 func New(conn net.Conn) *Client {
 	return &Client{
-		conn:               conn,
-		irc:                irc.NewConn(conn),
-		subscribedChannels: make(map[discord.Snowflake]string),
-		serverPrefix:       &irc.Prefix{Name: conn.LocalAddr().String()},
-		clientPrefix:       &irc.Prefix{Name: conn.RemoteAddr().String()},
-		caps:               make(map[string]bool),
+		conn:           conn,
+		irc:            irc.NewConn(conn),
+		serverPrefix:   &irc.Prefix{Name: conn.LocalAddr().String()},
+		clientPrefix:   &irc.Prefix{Name: conn.RemoteAddr().String()},
+		caps:           make(map[string]bool),
+		joinedChannels: make(map[discord.Snowflake]bool),
 	}
 }
 
@@ -211,8 +211,8 @@ func (c *Client) sendGreeting() error {
 	if err := c.WriteMessage(&irc.Message{
 		Prefix:  c.serverPrefix,
 		Command: irc.RPL_WELCOME,
-		Params: []string{c.clientPrefix.Name, fmt.Sprintf("Welcome to %s, %s#%s",
-			guildName, me.Username, me.Discriminator)},
+		Params: []string{c.clientPrefix.Name, fmt.Sprintf("Welcome to %s, %s",
+			guildName, c.clientPrefix.Name)},
 	}); err != nil {
 		return err
 	}
@@ -233,6 +233,26 @@ func (c *Client) sendGreeting() error {
 			fmt.Sprintf("This server was created %s", guildID.Time().String())},
 	}); err != nil {
 		return err
+	}
+
+	if c.guild != nil {
+		channels, err := c.session.Channels(c.guild.ID)
+		if err != nil {
+			return err
+		}
+		for _, channel := range channels {
+			if channel.Type != discord.GuildText {
+				continue
+			}
+			perms, err := c.session.Permissions(channel.ID, me.ID)
+			if err != nil {
+				return err
+			}
+			if !perms.Has(discord.PermissionViewChannel) {
+				continue
+			}
+			c.session.ChannelMap(c.guild.ID).Insert(channel.ID, channel.Name)
+		}
 	}
 
 	return nil

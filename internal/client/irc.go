@@ -1,6 +1,7 @@
 package client
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -10,47 +11,33 @@ import (
 	"gopkg.in/irc.v3"
 )
 
-func (c *Client) joinChannel(name string) error {
+func (c *Client) sendJoin(channel *discord.Channel) error {
 	if c.guild == nil {
-		return fmt.Errorf("JOIN for non-guilds is currently unimplemented")
+		return errors.New("JOIN for non-guilds is currently unsupported")
 	}
 
-	channels, err := c.session.Channels(c.guild.ID)
+	name, err := c.session.ChannelName(c.guild.ID, channel.ID)
 	if err != nil {
 		return err
 	}
 
-	var found *discord.Channel
-	for _, channel := range channels {
-		if channel.Name == name && channel.Type == discord.GuildText {
-			found = &channel
-			break
-		}
-	}
-
-	if found == nil {
-		return fmt.Errorf("unknown channel %s", name)
-	}
-
-	c.subscribedChannels[found.ID] = name
-
 	err = c.WriteMessage(&irc.Message{
 		Prefix:  c.clientPrefix,
 		Command: "JOIN",
-		Params:  []string{fmt.Sprintf("#%s", name)},
+		Params:  []string{name},
 	})
 	if err != nil {
 		return err
 	}
 
-	if found.Topic != "" {
+	if channel.Topic != "" {
 		err = c.WriteMessage(&irc.Message{
 			Prefix:  c.serverPrefix,
 			Command: irc.RPL_TOPIC,
 			Params: []string{
 				c.clientPrefix.Name,
-				fmt.Sprintf("#%s", name),
-				render.Content(c.session, []byte(found.Topic), nil),
+				name,
+				render.Content(c.session, []byte(channel.Topic), nil),
 			},
 		})
 	}
@@ -60,14 +47,14 @@ func (c *Client) joinChannel(name string) error {
 		Command: "329", // RPL_CREATIONTIME
 		Params: []string{
 			c.clientPrefix.Name,
-			fmt.Sprintf("#%s", name),
-			fmt.Sprint(found.ID.Time().Unix()),
+			fmt.Sprintf("%s", name),
+			fmt.Sprint(channel.ID.Time().Unix()),
 		},
 	}); err != nil {
 		return err
 	}
 
-	backlog, err := c.session.Messages(found.ID)
+	backlog, err := c.session.Messages(channel.ID)
 	for i := len(backlog) - 1; i >= 0; i-- {
 		if err := c.sendDiscordMessage(&backlog[i]); err != nil {
 			return err
@@ -77,18 +64,9 @@ func (c *Client) joinChannel(name string) error {
 	return err
 }
 
-func (c *Client) sendMessage(channel, content string) error {
-	var found *discord.Snowflake
-	for id, name := range c.subscribedChannels {
-		if name == channel {
-			found = &id
-			break
-		}
-	}
-	if found == nil {
-		return fmt.Errorf("unknown channel %s", channel)
-	}
-	msg, err := c.session.SendMessage(*found, content, nil)
+func (c *Client) sendMessage(channelName, content string) error {
+	channel := c.session.ChannelFromName(c.guild.ID, channelName)
+	msg, err := c.session.SendMessage(channel, content, nil)
 	if err != nil {
 		return err
 	}
@@ -124,7 +102,12 @@ func (c *Client) handleIRCJoin(msg *irc.Message) error {
 		if !strings.HasPrefix(name, "#") {
 			return fmt.Errorf("invalid channel name")
 		}
-		if err := c.joinChannel(name[1:]); err != nil {
+		channelID := c.session.ChannelFromName(c.guild.ID, name[1:])
+		channel, err := c.session.Channel(channelID)
+		if err != nil {
+			return err
+		}
+		if err := c.sendJoin(channel); err != nil {
 			return err
 		}
 	}

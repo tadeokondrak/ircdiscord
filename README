@@ -4,7 +4,7 @@ ircdiscord
 Build command: go build
 
 Run the binary and connect to the IRC server with the password
-<discord token>:<discord server id>
+<discord token>:<discord server id> (without the angle brackets)
 
 Multiple simultaneous connections are supported, and will share the
 same Discord websocket connection.

@@ -135,6 +135,9 @@ var pingRegex = regexp.MustCompile(`@[^ ]*`)
 
 func (c *Client) replaceIRCMentions(s string) string {
 	return pingRegex.ReplaceAllStringFunc(s, func(match string) string {
+		if match == "@" {
+			return match
+		}
 		id := c.session.UserFromName(match[1:])
 		if !id.Valid() {
 			return match

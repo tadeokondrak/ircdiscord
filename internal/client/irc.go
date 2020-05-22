@@ -64,16 +64,6 @@ func (c *Client) sendJoin(channel *discord.Channel) error {
 	return err
 }
 
-func (c *Client) sendMessage(channelName, content string) error {
-	channel := c.session.ChannelFromName(c.guild.ID, channelName)
-	msg, err := c.session.SendMessage(channel, content, nil)
-	if err != nil {
-		return err
-	}
-	c.lastMessageID = msg.ID
-	return nil
-}
-
 func (c *Client) handleIRCMessage(msg *irc.Message) error {
 	switch msg.Command {
 	case "PING":
@@ -126,9 +116,100 @@ func (c *Client) handleIRCPrivmsg(msg *irc.Message) error {
 		return fmt.Errorf("invalid channel name")
 	}
 	text := msg.Params[1]
+	if strings.HasPrefix(text, "s/") {
+		return c.handleIRCRegexEdit(msg)
+	}
 	text = actionRegex.ReplaceAllString(text, "*$1*")
 	text = c.replaceIRCMentions(text)
-	return c.sendMessage(msg.Params[0][1:], text)
+	channel := c.session.ChannelFromName(c.guild.ID, strings.TrimPrefix(msg.Params[0], "#"))
+	if !channel.Valid() {
+		panic("TODO make this an error not a panic lol")
+	}
+	dmsg, err := c.session.SendMessage(channel, msg.Params[1], nil)
+	if err != nil {
+		return err
+	}
+	c.lastMessageID = dmsg.ID
+
+	return nil
+}
+
+var editRegex = regexp.MustCompile(`^s/((?:\\/|[^/])*)/((?:\\/|[^/])*)(?:/(g?))?$`)
+
+func (c *Client) handleIRCRegexEdit(msg *irc.Message) error {
+	bail := func(format string, args ...interface{}) error {
+		return c.WriteMessage(&irc.Message{
+			Prefix:  c.serverPrefix,
+			Command: "NOTICE",
+			Params:  []string{msg.Params[0], fmt.Sprintf(format, args...)}},
+		)
+	}
+
+	matches := editRegex.FindStringSubmatch(msg.Params[1])
+	if matches == nil {
+		return bail("invalid replacement")
+	}
+
+	regex, err := regexp.Compile(matches[1])
+	if err != nil {
+		return bail("failed to compile regex: %v", err)
+	}
+
+	channel := c.session.ChannelFromName(c.guild.ID, strings.TrimPrefix(msg.Params[0], "#"))
+	if !channel.Valid() {
+		return fmt.Errorf("failed to find channel #%s", msg.Params[0])
+	}
+
+	backlog, err := c.session.Messages(channel)
+	if err != nil {
+		return err
+	}
+
+	me, err := c.session.Me()
+	if err != nil {
+		return err
+	}
+
+	var snowflake discord.Snowflake
+	for _, msg := range backlog {
+		if msg.Author.ID == me.ID {
+			snowflake = msg.ID
+			break
+		}
+	}
+
+	if !snowflake.Valid() {
+		return bail("failed to find your message")
+	}
+
+	message, err := c.session.Message(channel, snowflake)
+	if err != nil {
+		return err
+	}
+
+	beforeEdit := message.Content
+
+	var result string
+
+	if matches[3] == "g" {
+		fmt.Printf("%s,%s,%s", regex, beforeEdit, matches)
+		result = regex.ReplaceAllString(beforeEdit, matches[2])
+	} else {
+		match := regex.FindStringSubmatchIndex(beforeEdit)
+		if match == nil {
+			return bail("no matches")
+		}
+		dst := []byte{}
+		replaced := regex.ExpandString(dst, matches[2], beforeEdit, match)
+		result = beforeEdit[:match[0]] + string(replaced) + beforeEdit[match[1]:]
+	}
+
+	dmsg, err := c.session.EditMessage(message.ChannelID, message.ID, string(result), nil, false)
+	if err != nil {
+		return err
+	}
+	c.lastMessageID = dmsg.ID
+	return nil
 }
 
 var pingRegex = regexp.MustCompile(`@[^ ]*`)

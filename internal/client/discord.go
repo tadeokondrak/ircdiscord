@@ -50,8 +50,16 @@ func (c *Client) handleDiscordEvent(e gateway.Event) error {
 	case *gateway.ResumedEvent:
 	case *gateway.InvalidSessionEvent:
 	case *gateway.ChannelCreateEvent:
+		var channel discord.Channel = *(*discord.Channel)(e)
+		if visible, err := c.channelIsVisible(&channel); err != nil {
+			return err
+		} else if visible {
+			c.session.ChannelMap(c.guild.ID).Insert(channel.ID, channel.Name)
+		}
 	case *gateway.ChannelUpdateEvent:
+		// TODO: remove from map
 	case *gateway.ChannelDeleteEvent:
+		// TODO: remove from map
 	case *gateway.ChannelPinsUpdateEvent:
 	case *gateway.ChannelUnreadUpdateEvent:
 	case *gateway.GuildCreateEvent:

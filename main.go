@@ -11,16 +11,18 @@ import (
 )
 
 var (
-	ircDebug   bool
-	tlsEnabled bool
-	port       int
-	certfile   string
-	keyfile    string
+	ircDebug     bool
+	discordDebug bool
+	tlsEnabled   bool
+	port         int
+	certfile     string
+	keyfile      string
 )
 
 func runClient(conn net.Conn) {
 	c := client.New(conn)
 	c.IRCDebug = ircDebug
+	c.DiscordDebug = discordDebug
 	if err := c.Run(); err != nil {
 		log.Println(err)
 	}
@@ -28,6 +30,7 @@ func runClient(conn net.Conn) {
 
 func main() {
 	flag.BoolVar(&ircDebug, "ircdebug", false, "enable logging of all irc communication")
+	flag.BoolVar(&discordDebug, "discorddebug", false, "enable logging of some discord communication")
 	flag.BoolVar(&tlsEnabled, "tls", false, "enable tls encryption")
 	flag.IntVar(&port, "port", 0, "port to run on, defaults to 6667/6697 depending on tls")
 	flag.StringVar(&certfile, "cert", "", "tls certificate file")

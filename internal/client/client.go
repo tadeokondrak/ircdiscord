@@ -23,6 +23,7 @@ type Client struct {
 	caps           map[string]bool
 	joinedChannels map[discord.Snowflake]bool
 	IRCDebug       bool
+	DiscordDebug   bool
 }
 
 func New(conn net.Conn) *Client {
@@ -45,7 +46,7 @@ func (c *Client) Close() error {
 
 func (c *Client) WriteMessage(m *irc.Message) error {
 	if c.IRCDebug {
-		log.Printf("-> %s", m)
+		log.Printf("->i %s", m)
 	}
 	return c.irc.WriteMessage(m)
 }
@@ -53,7 +54,7 @@ func (c *Client) WriteMessage(m *irc.Message) error {
 func (c *Client) ReadMessage() (*irc.Message, error) {
 	m, err := c.irc.ReadMessage()
 	if c.IRCDebug && err == nil {
-		log.Printf("<- %s", m)
+		log.Printf("<-i %s", m)
 	}
 	return m, err
 }
@@ -125,7 +126,7 @@ func (c *Client) Run() error {
 				return fmt.Errorf("invalid parameter count for PASS")
 			}
 			args := strings.SplitN(msg.Params[0], ":", 2)
-			session, err := session.Get(args[0])
+			session, err := session.Get(args[0], c.DiscordDebug)
 			if err != nil {
 				return err
 			}

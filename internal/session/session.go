@@ -12,6 +12,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/arikawa/utils/httputil/httpdriver"
 	"github.com/tadeokondrak/ircdiscord/internal/idmap"
 )
 
@@ -27,6 +28,7 @@ type Session struct {
 	ChannelMapsMutex sync.RWMutex
 	id               discord.Snowflake
 	refs             uint32
+	debug            bool
 }
 
 var (
@@ -36,8 +38,9 @@ var (
 )
 
 // Get returns the Session for a given token, connecting to Discord if
-// it does not already exist.
-func Get(token string) (*Session, error) {
+// it does not already exist. If the session does not already exist, and
+// debug is true, the newly created session will log information to stderr.
+func Get(token string, debug bool) (*Session, error) {
 	sessionLock.Lock()
 	defer sessionLock.Unlock()
 
@@ -53,15 +56,13 @@ func Get(token string) (*Session, error) {
 		return nil, err
 	}
 
-	/*
-		TODO: enable this for -discorddebug
-
-		state.AddHandler(func(e interface{}) { fmt.Printf("%T\n", e) })
+	if debug {
+		state.AddHandler(func(e interface{}) { fmt.Printf("<-d %T\n", e) })
 		state.OnRequest = append(state.OnRequest, func(r httpdriver.Request) error {
-			fmt.Printf("%T\n", r)
+			fmt.Printf("d-> %s\n", r.GetPath())
 			return nil
 		})
-	*/
+	}
 
 	events, cancel := state.ChanFor(func(e interface{}) bool { _, ok := e.(*gateway.ReadyEvent); return ok })
 	defer cancel()

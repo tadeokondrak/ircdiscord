@@ -204,11 +204,8 @@ func (c *Client) handleIRCRegexEdit(msg *irc.Message) error {
 		result = beforeEdit[:match[0]] + string(replaced) + beforeEdit[match[1]:]
 	}
 
-	dmsg, err := c.session.EditMessage(message.ChannelID, message.ID, string(result), nil, false)
-	if err != nil {
-		return err
-	}
-	return nil
+	_, err = c.session.EditMessage(message.ChannelID, message.ID, string(result), nil, false)
+	return err
 }
 
 var pingRegex = regexp.MustCompile(`@[^ ]*`)

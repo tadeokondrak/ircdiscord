@@ -24,7 +24,7 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 	}
 	tags := make(irc.Tags)
 	if c.caps["server-time"] {
-		tags["time"] = irc.TagValue(m.ID.Time().Format("2006-01-02T15:04:05.000Z"))
+		tags["time"] = irc.TagValue(m.ID.Time().UTC().Format("2006-01-02T15:04:05.000Z"))
 	}
 	message, err := render.Message(c.session, m)
 	if err != nil {

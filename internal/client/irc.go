@@ -208,7 +208,6 @@ func (c *Client) handleIRCRegexEdit(msg *irc.Message) error {
 	if err != nil {
 		return err
 	}
-	c.lastMessageID = dmsg.ID
 	return nil
 }
 

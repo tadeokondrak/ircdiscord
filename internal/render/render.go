@@ -136,9 +136,9 @@ func Content(sess *session.Session, source []byte, m *discord.Message) string {
 	return s.String()
 }
 
-func Message(sess *session.Session, m *discord.Message, send func(string) error) error {
+func Message(sess *session.Session, m *discord.Message) (string, error) {
 	if m.Type != discord.DefaultMessage {
-		return nil
+		return "", nil
 	}
 	var s strings.Builder
 	s.WriteString(Content(sess, []byte(m.Content), m))
@@ -185,12 +185,8 @@ func Message(sess *session.Session, m *discord.Message, send func(string) error)
 			fmt.Fprintf(&s, " | \x0302%s\x03\n", a.Proxy)
 		}
 	}
-	for _, s := range strings.Split(strings.Trim(s.String(), "\n"), "\n") {
-		if err := send(s); err != nil {
-			return err
-		}
-	}
-	return nil
+	return strings.Trim(s.String(), "\n"), nil
+
 }
 
 type ircPrinter struct{}

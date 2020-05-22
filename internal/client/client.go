@@ -158,6 +158,10 @@ func (c *Client) Run() error {
 
 	c.clientPrefix = c.discordUserPrefix(me)
 
+	if err := c.seedState(); err != nil {
+		return err
+	}
+
 	if err := c.sendGreeting(); err != nil {
 		return err
 	}
@@ -193,6 +197,42 @@ func (c *Client) Run() error {
 			return err
 		}
 	}
+}
+
+func (c *Client) channelIsVisible(channel *discord.Channel) (bool, error) {
+	me, err := c.session.Me()
+	if err != nil {
+		return false, err
+	}
+
+	if channel.Type != discord.GuildText {
+		return false, nil
+	}
+
+	perms, err := c.session.Permissions(channel.ID, me.ID)
+	if err != nil {
+		return false, err
+	}
+
+	return perms.Has(discord.PermissionViewChannel), nil
+}
+
+func (c *Client) seedState() error {
+	if c.guild != nil {
+		channels, err := c.session.Channels(c.guild.ID)
+		if err != nil {
+			return err
+		}
+		for _, channel := range channels {
+			if visible, err := c.channelIsVisible(&channel); err != nil {
+				return err
+			} else if visible {
+				c.session.ChannelMap(c.guild.ID).Insert(channel.ID, channel.Name)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (c *Client) sendGreeting() error {
@@ -233,26 +273,6 @@ func (c *Client) sendGreeting() error {
 			fmt.Sprintf("This server was created %s", guildID.Time().String())},
 	}); err != nil {
 		return err
-	}
-
-	if c.guild != nil {
-		channels, err := c.session.Channels(c.guild.ID)
-		if err != nil {
-			return err
-		}
-		for _, channel := range channels {
-			if channel.Type != discord.GuildText {
-				continue
-			}
-			perms, err := c.session.Permissions(channel.ID, me.ID)
-			if err != nil {
-				return err
-			}
-			if !perms.Has(discord.PermissionViewChannel) {
-				continue
-			}
-			c.session.ChannelMap(c.guild.ID).Insert(channel.ID, channel.Name)
-		}
 	}
 
 	return nil

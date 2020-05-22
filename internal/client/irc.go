@@ -37,7 +37,7 @@ func (c *Client) sendJoin(channel *discord.Channel) error {
 			Params: []string{
 				c.clientPrefix.Name,
 				name,
-				render.Content(c.session, []byte(channel.Topic), nil),
+				strings.ReplaceAll(render.Content(c.session, []byte(channel.Topic), nil), "\n", " "),
 			},
 		})
 	}
@@ -82,6 +82,8 @@ func (c *Client) handleIRCMessage(msg *irc.Message) error {
 		return c.handleIRCJoin(msg)
 	case "PRIVMSG":
 		return c.handleIRCPrivmsg(msg)
+	case "LIST":
+		return c.handleIRCList(msg)
 	default:
 		return nil
 	}
@@ -126,4 +128,50 @@ func (c *Client) handleIRCPrivmsg(msg *irc.Message) error {
 	text := msg.Params[1]
 	text = actionRegex.ReplaceAllString(text, "*$1*")
 	return c.sendMessage(msg.Params[0][1:], text)
+}
+
+func (c *Client) handleIRCList(msg *irc.Message) error {
+	if c.guild == nil {
+		// TODO: support /LIST for non-guilds
+		return nil
+	}
+
+	if err := c.WriteMessage(&irc.Message{
+		Prefix:  c.serverPrefix,
+		Command: irc.RPL_LISTSTART,
+		Params:  []string{c.clientPrefix.Name, fmt.Sprintf("Channel list for %s", c.guild.Name)},
+	}); err != nil {
+		return err
+	}
+	channels, err := c.session.Channels(c.guild.ID)
+	if err != nil {
+		return err
+	}
+	for _, channel := range channels {
+		if visible, err := c.channelIsVisible(&channel); err != nil {
+			return err
+		} else if !visible {
+			continue
+		}
+		name, err := c.session.ChannelName(c.guild.ID, channel.ID)
+		if err != nil {
+			return err
+		}
+		if err := c.WriteMessage(&irc.Message{
+			Prefix:  c.serverPrefix,
+			Command: irc.RPL_LIST,
+			Params: []string{c.clientPrefix.Name, name, fmt.Sprint(channel.Position),
+				strings.ReplaceAll(render.Content(c.session, []byte(channel.Topic), nil), "\n", " ")},
+		}); err != nil {
+			return err
+		}
+	}
+	if err := c.WriteMessage(&irc.Message{
+		Prefix:  c.serverPrefix,
+		Command: irc.RPL_LISTEND,
+		Params:  []string{c.clientPrefix.Name, "End of /LIST"},
+	}); err != nil {
+		return err
+	}
+	return nil
 }

@@ -1,6 +1,8 @@
 package client
 
 import (
+	"strings"
+
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/tadeokondrak/ircdiscord/internal/render"
@@ -24,14 +26,21 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 	if c.caps["server-time"] {
 		tags["time"] = irc.TagValue(m.ID.Time().Format("2006-01-02T15:04:05.000Z"))
 	}
-	return render.Message(c.session, m, func(s string) error {
-		return c.WriteMessage(&irc.Message{
+	message, err := render.Message(c.session, m)
+	if err != nil {
+		return err
+	}
+	for _, line := range strings.Split(message, "\n") {
+		if err := c.WriteMessage(&irc.Message{
 			Tags:    tags,
 			Prefix:  c.discordUserPrefix(&m.Author),
 			Command: "PRIVMSG",
-			Params:  []string{channelName, s},
-		})
-	})
+			Params:  []string{channelName, line},
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Client) handleDiscordEvent(e gateway.Event) error {

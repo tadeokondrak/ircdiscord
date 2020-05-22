@@ -118,10 +118,15 @@ func (s *Session) Close() error {
 
 // UserName returns the IRC name for the given Discord user.
 func (s *Session) UserName(d *discord.User) string {
+	// TODO: this should just take an ID/Name pair, really
 	if !d.ID.Valid() {
 		return sanitizeNick(d.Username)
 	}
 	return s.NickMap.Insert(d.ID, sanitizeNick(d.Username))
+}
+
+func (s *Session) UserFromName(name string) discord.Snowflake {
+	return s.NickMap.Snowflake(name)
 }
 
 var ErrNoChannel = errors.New("no channel by that name exists")

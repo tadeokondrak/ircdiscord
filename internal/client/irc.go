@@ -127,7 +127,20 @@ func (c *Client) handleIRCPrivmsg(msg *irc.Message) error {
 	}
 	text := msg.Params[1]
 	text = actionRegex.ReplaceAllString(text, "*$1*")
+	text = c.replaceIRCMentions(text)
 	return c.sendMessage(msg.Params[0][1:], text)
+}
+
+var pingRegex = regexp.MustCompile(`@[^ ]*`)
+
+func (c *Client) replaceIRCMentions(s string) string {
+	return pingRegex.ReplaceAllStringFunc(s, func(match string) string {
+		id := c.session.UserFromName(match[1:])
+		if !id.Valid() {
+			return match
+		}
+		return fmt.Sprintf("<@%d>", id)
+	})
 }
 
 func (c *Client) handleIRCList(msg *irc.Message) error {

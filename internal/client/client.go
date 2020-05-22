@@ -232,7 +232,6 @@ func (c *Client) seedState() error {
 			}
 		}
 	}
-
 	return nil
 }
 

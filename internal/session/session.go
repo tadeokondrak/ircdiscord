@@ -19,13 +19,13 @@ import (
 // Session is the reference-counted shared state between all Clients of a
 // specific Discord user.
 //
-// It notably includes the Discord state, as well as a map of IRC nicks to
-// Discord users.
+// It notably includes the Discord state, as well as a map of IRC
+// nick/channel names to Discord IDs.
 type Session struct {
 	*state.State
-	NickMap          *idmap.IDMap
-	ChannelMaps      map[discord.Snowflake]*idmap.IDMap
-	ChannelMapsMutex sync.RWMutex
+	nickMap          *idmap.IDMap
+	channelMaps      map[discord.Snowflake]*idmap.IDMap
+	channelMapsMutex sync.RWMutex
 	id               discord.Snowflake
 	refs             uint32
 	debug            bool
@@ -75,11 +75,11 @@ func Get(token string, debug bool) (*Session, error) {
 
 	session := &Session{
 		State:       state,
-		NickMap:     idmap.New(),
-		ChannelMaps: make(map[discord.Snowflake]*idmap.IDMap),
+		nickMap:     idmap.New(),
+		channelMaps: make(map[discord.Snowflake]*idmap.IDMap),
 		refs:        0,
 	}
-	session.NickMap.Concurrent = true
+	session.nickMap.Concurrent = true
 
 	me, err := state.Me()
 	if err != nil {
@@ -122,40 +122,40 @@ func (s *Session) UserName(d *discord.User) string {
 	if !d.ID.Valid() {
 		return sanitizeNick(d.Username)
 	}
-	return s.NickMap.Insert(d.ID, sanitizeNick(d.Username))
+	return s.nickMap.Insert(d.ID, sanitizeNick(d.Username))
 }
 
 func (s *Session) UserFromName(name string) discord.Snowflake {
-	return s.NickMap.Snowflake(name)
+	return s.nickMap.Snowflake(name)
 }
 
 var ErrNoChannel = errors.New("no channel by that name exists")
 
-func (s *Session) ChannelMap(guild discord.Snowflake) *idmap.IDMap {
-	s.ChannelMapsMutex.RLock()
-	themap, ok := s.ChannelMaps[guild]
-	s.ChannelMapsMutex.RUnlock()
+func (s *Session) channelMap(guild discord.Snowflake) *idmap.IDMap {
+	s.channelMapsMutex.RLock()
+	themap, ok := s.channelMaps[guild]
+	s.channelMapsMutex.RUnlock()
 	if ok {
 		return themap
 	}
 
-	s.ChannelMapsMutex.Lock()
-	defer s.ChannelMapsMutex.Unlock()
-	s.ChannelMaps[guild] = idmap.New()
-	s.ChannelMaps[guild].Concurrent = true
-	return s.ChannelMaps[guild]
+	s.channelMapsMutex.Lock()
+	defer s.channelMapsMutex.Unlock()
+	s.channelMaps[guild] = idmap.New()
+	s.channelMaps[guild].Concurrent = true
+	return s.channelMaps[guild]
 }
 
 // ChannelFromName returns the Discord channel for a given IRC channel name.
 func (s *Session) ChannelFromName(guild discord.Snowflake, name string) discord.Snowflake {
-	channelMap := s.ChannelMap(guild)
+	channelMap := s.channelMap(guild)
 	return channelMap.Snowflake(strings.TrimPrefix(name, "#"))
 }
 
 // ChannelName returns the IRC channel name for the given Discord channel ID.
 // It includes the leading #.
 func (s *Session) ChannelName(guild discord.Snowflake, id discord.Snowflake) (string, error) {
-	channelMap := s.ChannelMap(guild)
+	channelMap := s.channelMap(guild)
 
 	if name := channelMap.Name(id); name != "" {
 		return fmt.Sprintf("#%s", name), nil

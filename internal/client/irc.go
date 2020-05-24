@@ -94,13 +94,19 @@ func (c *Client) handleIRCJoin(msg *irc.Message) error {
 		if !strings.HasPrefix(name, "#") {
 			return fmt.Errorf("invalid channel name")
 		}
-		channelID := c.session.ChannelFromName(c.guild, name[1:])
-		channel, err := c.session.Channel(channelID)
+		channels, err := c.session.Channels(c.guild)
 		if err != nil {
 			return err
 		}
-		if err := c.sendJoin(channel); err != nil {
-			return err
+		for _, channel := range channels {
+			channelName, err := c.session.ChannelName(c.guild, channel.ID)
+			if err != nil {
+				return err
+			}
+			if name != channelName {
+				continue
+			}
+			return c.sendJoin(&channel)
 		}
 	}
 	return nil

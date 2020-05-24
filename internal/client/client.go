@@ -8,13 +8,14 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/tadeokondrak/ircdiscord/internal/replies"
 	"github.com/tadeokondrak/ircdiscord/internal/session"
 	"gopkg.in/irc.v3"
 )
 
 type Client struct {
-	conn         net.Conn
-	irc          *irc.Conn
+	*irc.Conn
+	net          net.Conn
 	session      *session.Session
 	guild        discord.Snowflake
 	serverPrefix *irc.Prefix
@@ -31,18 +32,18 @@ type Client struct {
 
 func New(conn net.Conn) *Client {
 	c := &Client{
-		conn:         conn,
-		irc:          irc.NewConn(conn),
+		Conn:         irc.NewConn(conn),
+		net:          conn,
 		serverPrefix: &irc.Prefix{Name: conn.LocalAddr().String()},
 		clientPrefix: &irc.Prefix{Name: conn.RemoteAddr().String()},
 		caps:         make(map[string]bool),
 	}
-	c.irc.Reader.DebugCallback = func(line string) {
+	c.Conn.Reader.DebugCallback = func(line string) {
 		if c.IRCDebug {
 			log.Printf("<-i %s", line)
 		}
 	}
-	c.irc.Writer.DebugCallback = func(line string) {
+	c.Conn.Writer.DebugCallback = func(line string) {
 		if c.IRCDebug {
 			log.Printf("->i %s", line)
 		}
@@ -54,7 +55,19 @@ func (c *Client) Close() error {
 	if c.session != nil {
 		c.session.Unref()
 	}
-	return c.conn.Close()
+	return c.net.Close()
+}
+
+func (c *Client) HasCapability(capability string) bool {
+	return c.caps[capability]
+}
+
+func (c *Client) ClientPrefix() *irc.Prefix {
+	return c.clientPrefix
+}
+
+func (c *Client) ServerPrefix() *irc.Prefix {
+	return c.serverPrefix
 }
 
 var supportedCaps = []string{
@@ -62,7 +75,6 @@ var supportedCaps = []string{
 	"server-time",
 	"message-tags",
 }
-var supportedCapsString = strings.Join(supportedCaps, " ")
 var supportedCapsSet = func() map[string]bool {
 	set := make(map[string]bool)
 	for _, capability := range supportedCaps {
@@ -79,7 +91,7 @@ func (c *Client) Run() error {
 
 	passed, nicked, usered, blocked := false, false, false, false
 	for !passed || !nicked || !usered || blocked {
-		msg, err := c.irc.ReadMessage()
+		msg, err := c.ReadMessage()
 		if err != nil {
 			return err
 		}
@@ -94,27 +106,24 @@ func (c *Client) Run() error {
 			}
 			switch msg.Params[0] {
 			case "LS":
-				c.irc.WriteMessage(&irc.Message{
-					Prefix:  c.serverPrefix,
-					Command: "CAP",
-					Params:  []string{c.clientPrefix.Name, "LS", supportedCapsString},
-				})
+				if err := replies.CAP_LS(c, supportedCaps); err != nil {
+					return err
+				}
 				blocked = true
 			case "REQ":
 				if len(msg.Params) != 2 {
 					return fmt.Errorf("invalid parameter count for CAP REQ")
 				}
-				for _, capability := range strings.Split(msg.Params[1], " ") {
+				requested := strings.Split(msg.Params[1], " ")
+				for _, capability := range requested {
 					if !supportedCapsSet[capability] {
 						return fmt.Errorf("invalid capability requested: %s", capability)
 					}
 					c.caps[capability] = true
 				}
-				c.irc.WriteMessage(&irc.Message{
-					Prefix:  c.serverPrefix,
-					Command: "CAP",
-					Params:  []string{c.clientPrefix.Name, "ACK", msg.Params[1]},
-				})
+				if err := replies.CAP_ACK(c, requested); err != nil {
+					return err
+				}
 				blocked = true
 			case "END":
 				blocked = false
@@ -166,7 +175,7 @@ func (c *Client) Run() error {
 
 	go func() {
 		for {
-			msg, err := c.irc.ReadMessage()
+			msg, err := c.ReadMessage()
 			if err != nil {
 				errors <- err
 				return
@@ -229,38 +238,19 @@ func (c *Client) sendGreeting() error {
 		guildID = c.guild
 	}
 
-	if err := c.irc.WriteMessage(&irc.Message{
-		Prefix:  c.serverPrefix,
-		Command: irc.RPL_WELCOME,
-		Params: []string{c.clientPrefix.Name, fmt.Sprintf("Welcome to %s, %s",
-			guildName, c.clientPrefix.Name)},
-	}); err != nil {
+	if err := replies.RPL_WELCOME(c, guildName); err != nil {
 		return err
 	}
 
-	if err := c.irc.WriteMessage(&irc.Message{
-		Prefix:  c.serverPrefix,
-		Command: irc.RPL_YOURHOST,
-		Params: []string{c.clientPrefix.Name,
-			fmt.Sprintf("Your host is %s, running ircdiscord", c.serverPrefix.Name)},
-	}); err != nil {
+	if err := replies.RPL_YOURHOST(c); err != nil {
 		return err
 	}
 
-	if err := c.irc.WriteMessage(&irc.Message{
-		Prefix:  c.serverPrefix,
-		Command: irc.RPL_CREATED,
-		Params: []string{c.clientPrefix.Name,
-			fmt.Sprintf("This server was created %s", guildID.Time().String())},
-	}); err != nil {
+	if err := replies.RPL_CREATED(c, guildID.Time()); err != nil {
 		return err
 	}
 
-	if err := c.irc.WriteMessage(&irc.Message{
-		Prefix:  c.serverPrefix,
-		Command: irc.ERR_NOMOTD,
-		Params:  []string{c.clientPrefix.Name, "No MOTD"},
-	}); err != nil {
+	if err := replies.ERR_NOMOTD(c); err != nil {
 		return err
 	}
 

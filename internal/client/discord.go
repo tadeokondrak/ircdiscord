@@ -6,6 +6,7 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/tadeokondrak/ircdiscord/internal/render"
+	"github.com/tadeokondrak/ircdiscord/internal/replies"
 	"gopkg.in/irc.v3"
 )
 
@@ -22,21 +23,14 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 	if err != nil {
 		return err
 	}
-	tags := make(irc.Tags)
-	if c.caps["server-time"] {
-		tags["time"] = irc.TagValue(m.ID.Time().UTC().Format("2006-01-02T15:04:05.000Z"))
-	}
 	message, err := render.Message(c.session, m)
 	if err != nil {
 		return err
 	}
 	for _, line := range strings.Split(message, "\n") {
-		if err := c.irc.WriteMessage(&irc.Message{
-			Tags:    tags,
-			Prefix:  c.discordUserPrefix(&m.Author),
-			Command: "PRIVMSG",
-			Params:  []string{channelName, line},
-		}); err != nil {
+		if err := replies.PRIVMSG(
+			c, m.ID.Time(), c.discordUserPrefix(&m.Author), channelName, line,
+		); err != nil {
 			return err
 		}
 	}

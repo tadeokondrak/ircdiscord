@@ -8,6 +8,7 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/tadeokondrak/ircdiscord/internal/render"
+	"github.com/tadeokondrak/ircdiscord/internal/replies"
 	"gopkg.in/irc.v3"
 )
 
@@ -21,36 +22,18 @@ func (c *Client) sendJoin(channel *discord.Channel) error {
 		return err
 	}
 
-	err = c.irc.WriteMessage(&irc.Message{
-		Prefix:  c.clientPrefix,
-		Command: "JOIN",
-		Params:  []string{name},
-	})
-	if err != nil {
+	if err := replies.JOIN(c, []string{name}); err != nil {
 		return err
 	}
 
 	if channel.Topic != "" {
-		err = c.irc.WriteMessage(&irc.Message{
-			Prefix:  c.serverPrefix,
-			Command: irc.RPL_TOPIC,
-			Params: []string{
-				c.clientPrefix.Name,
-				name,
-				strings.ReplaceAll(render.Content(c.session, []byte(channel.Topic), nil), "\n", " "),
-			},
-		})
+		topic := strings.ReplaceAll(render.Content(c.session, []byte(channel.Topic), nil), "\n", " ")
+		if err := replies.RPL_TOPIC(c, name, topic); err != nil {
+			return err
+		}
 	}
 
-	if err := c.irc.WriteMessage(&irc.Message{
-		Prefix:  c.serverPrefix,
-		Command: "329", // RPL_CREATIONTIME
-		Params: []string{
-			c.clientPrefix.Name,
-			fmt.Sprintf("%s", name),
-			fmt.Sprint(channel.ID.Time().Unix()),
-		},
-	}); err != nil {
+	if err := replies.RPL_CREATIONTIME(c, name, channel.ID.Time()); err != nil {
 		return err
 	}
 
@@ -80,11 +63,10 @@ func (c *Client) handleIRCMessage(msg *irc.Message) error {
 }
 
 func (c *Client) handleIRCPing(msg *irc.Message) error {
-	return c.irc.WriteMessage(&irc.Message{
-		Prefix:  c.serverPrefix,
-		Command: "PONG",
-		Params:  msg.Params,
-	})
+	if len(msg.Params) != 1 {
+		return fmt.Errorf("invalid parameter count for PING")
+	}
+	return replies.PONG(c, msg.Params[0])
 }
 
 func (c *Client) handleIRCJoin(msg *irc.Message) error {
@@ -148,11 +130,8 @@ var editRegex = regexp.MustCompile(`^s/((?:\\/|[^/])*)/((?:\\/|[^/])*)(?:/(g?))?
 
 func (c *Client) handleIRCRegexEdit(msg *irc.Message) error {
 	bail := func(format string, args ...interface{}) error {
-		return c.irc.WriteMessage(&irc.Message{
-			Prefix:  c.serverPrefix,
-			Command: "NOTICE",
-			Params:  []string{msg.Params[0], fmt.Sprintf(format, args...)}},
-		)
+		return replies.NOTICE(
+			c, c.serverPrefix, msg.Params[0], fmt.Sprintf(format, args...))
 	}
 
 	matches := editRegex.FindStringSubmatch(msg.Params[1])
@@ -235,49 +214,38 @@ func (c *Client) replaceIRCMentions(s string) string {
 
 func (c *Client) handleIRCList(msg *irc.Message) error {
 	if !c.guild.Valid() {
-		// TODO: support /LIST for non-guilds
-		return nil
-	}
-	guild, err := c.session.Guild(c.guild)
-	if err != nil {
-		return err
+		return fmt.Errorf("/LIST for non-guilds is unsupported")
 	}
 
-	if err := c.irc.WriteMessage(&irc.Message{
-		Prefix:  c.serverPrefix,
-		Command: irc.RPL_LISTSTART,
-		Params:  []string{c.clientPrefix.Name, fmt.Sprintf("Channel list for %s", guild.Name)},
-	}); err != nil {
-		return err
-	}
 	channels, err := c.session.Channels(c.guild)
 	if err != nil {
 		return err
 	}
+
+	if err := replies.RPL_LISTSTART(c); err != nil {
+		return err
+	}
+
 	for _, channel := range channels {
 		if visible, err := c.channelIsVisible(&channel); err != nil {
 			return err
 		} else if !visible {
 			continue
 		}
+
 		name, err := c.session.ChannelName(c.guild, channel.ID)
 		if err != nil {
 			return err
 		}
-		if err := c.irc.WriteMessage(&irc.Message{
-			Prefix:  c.serverPrefix,
-			Command: irc.RPL_LIST,
-			Params: []string{c.clientPrefix.Name, name, fmt.Sprint(channel.Position),
-				strings.ReplaceAll(render.Content(c.session, []byte(channel.Topic), nil), "\n", " ")},
-		}); err != nil {
+
+		topic := strings.ReplaceAll(render.Content(c.session, []byte(channel.Topic), nil), "\n", " ")
+
+		if err := replies.RPL_LIST(c, name, channel.Position, topic); err != nil {
 			return err
 		}
+
 	}
-	if err := c.irc.WriteMessage(&irc.Message{
-		Prefix:  c.serverPrefix,
-		Command: irc.RPL_LISTEND,
-		Params:  []string{c.clientPrefix.Name, "End of /LIST"},
-	}); err != nil {
+	if err := replies.RPL_LISTEND(c); err != nil {
 		return err
 	}
 	return nil

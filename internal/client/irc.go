@@ -106,7 +106,10 @@ func (c *Client) handleIRCJoin(msg *irc.Message) error {
 			if name != channelName {
 				continue
 			}
-			return c.sendJoin(&channel)
+			if err := c.sendJoin(&channel); err != nil {
+				return err
+			}
+			break
 		}
 	}
 	return nil

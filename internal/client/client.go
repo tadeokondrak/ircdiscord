@@ -63,10 +63,10 @@ var supportedCaps = []string{
 	"message-tags",
 }
 var supportedCapsString = strings.Join(supportedCaps, " ")
-var supportedCapsSet = func() map[string]struct{} {
-	set := make(map[string]struct{})
+var supportedCapsSet = func() map[string]bool {
+	set := make(map[string]bool)
 	for _, capability := range supportedCaps {
-		set[capability] = struct{}{}
+		set[capability] = true
 	}
 	return set
 }()
@@ -105,7 +105,7 @@ func (c *Client) Run() error {
 					return fmt.Errorf("invalid parameter count for CAP REQ")
 				}
 				for _, capability := range strings.Split(msg.Params[1], " ") {
-					if _, ok := supportedCapsSet[capability]; !ok {
+					if !supportedCapsSet[capability] {
 						return fmt.Errorf("invalid capability requested: %s", capability)
 					}
 					c.caps[capability] = true
@@ -252,6 +252,14 @@ func (c *Client) sendGreeting() error {
 		Command: irc.RPL_CREATED,
 		Params: []string{c.clientPrefix.Name,
 			fmt.Sprintf("This server was created %s", guildID.Time().String())},
+	}); err != nil {
+		return err
+	}
+
+	if err := c.irc.WriteMessage(&irc.Message{
+		Prefix:  c.serverPrefix,
+		Command: irc.ERR_NOMOTD,
+		Params:  []string{c.clientPrefix.Name, "No MOTD"},
 	}); err != nil {
 		return err
 	}

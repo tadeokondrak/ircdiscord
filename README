@@ -3,8 +3,12 @@ ircdiscord
 
 Build command: go build
 
-Run the binary and connect to the IRC server with the password
-<discord token>:<discord server id> (without the angle brackets)
+Run the resulting binary and connect to the IRC server (by default,
+127.0.0.1:6667) with the server password <discord token>:<discord server id>
+(without the angle brackets).
+
+Note that HexChat silently truncates server passwords and is currently not
+supported.
 
 Multiple simultaneous connections are supported, and will share the
 same Discord websocket connection.

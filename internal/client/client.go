@@ -30,13 +30,24 @@ type Client struct {
 }
 
 func New(conn net.Conn) *Client {
-	return &Client{
+	c := &Client{
 		conn:         conn,
 		irc:          irc.NewConn(conn),
 		serverPrefix: &irc.Prefix{Name: conn.LocalAddr().String()},
 		clientPrefix: &irc.Prefix{Name: conn.RemoteAddr().String()},
 		caps:         make(map[string]bool),
 	}
+	c.irc.Reader.DebugCallback = func(line string) {
+		if c.IRCDebug {
+			log.Printf("<-i %s", line)
+		}
+	}
+	c.irc.Writer.DebugCallback = func(line string) {
+		if c.IRCDebug {
+			log.Printf("->i %s", line)
+		}
+	}
+	return c
 }
 
 func (c *Client) Close() error {
@@ -44,21 +55,6 @@ func (c *Client) Close() error {
 		c.session.Unref()
 	}
 	return c.conn.Close()
-}
-
-func (c *Client) WriteMessage(m *irc.Message) error {
-	if c.IRCDebug {
-		log.Printf("->i %s", m)
-	}
-	return c.irc.WriteMessage(m)
-}
-
-func (c *Client) ReadMessage() (*irc.Message, error) {
-	m, err := c.irc.ReadMessage()
-	if c.IRCDebug && err == nil {
-		log.Printf("<-i %s", m)
-	}
-	return m, err
 }
 
 var supportedCaps = []string{
@@ -83,7 +79,7 @@ func (c *Client) Run() error {
 
 	passed, nicked, usered, blocked := false, false, false, false
 	for !passed || !nicked || !usered || blocked {
-		msg, err := c.ReadMessage()
+		msg, err := c.irc.ReadMessage()
 		if err != nil {
 			return err
 		}
@@ -98,7 +94,7 @@ func (c *Client) Run() error {
 			}
 			switch msg.Params[0] {
 			case "LS":
-				c.WriteMessage(&irc.Message{
+				c.irc.WriteMessage(&irc.Message{
 					Prefix:  c.serverPrefix,
 					Command: "CAP",
 					Params:  []string{c.clientPrefix.Name, "LS", supportedCapsString},
@@ -114,7 +110,7 @@ func (c *Client) Run() error {
 					}
 					c.caps[capability] = true
 				}
-				c.WriteMessage(&irc.Message{
+				c.irc.WriteMessage(&irc.Message{
 					Prefix:  c.serverPrefix,
 					Command: "CAP",
 					Params:  []string{c.clientPrefix.Name, "ACK", msg.Params[1]},
@@ -174,7 +170,7 @@ func (c *Client) Run() error {
 
 	go func() {
 		for {
-			msg, err := c.ReadMessage()
+			msg, err := c.irc.ReadMessage()
 			if err != nil {
 				errors <- err
 				return
@@ -254,7 +250,7 @@ func (c *Client) sendGreeting() error {
 		guildID = c.guild
 	}
 
-	if err := c.WriteMessage(&irc.Message{
+	if err := c.irc.WriteMessage(&irc.Message{
 		Prefix:  c.serverPrefix,
 		Command: irc.RPL_WELCOME,
 		Params: []string{c.clientPrefix.Name, fmt.Sprintf("Welcome to %s, %s",
@@ -263,7 +259,7 @@ func (c *Client) sendGreeting() error {
 		return err
 	}
 
-	if err := c.WriteMessage(&irc.Message{
+	if err := c.irc.WriteMessage(&irc.Message{
 		Prefix:  c.serverPrefix,
 		Command: irc.RPL_YOURHOST,
 		Params: []string{c.clientPrefix.Name,
@@ -272,7 +268,7 @@ func (c *Client) sendGreeting() error {
 		return err
 	}
 
-	if err := c.WriteMessage(&irc.Message{
+	if err := c.irc.WriteMessage(&irc.Message{
 		Prefix:  c.serverPrefix,
 		Command: irc.RPL_CREATED,
 		Params: []string{c.clientPrefix.Name,

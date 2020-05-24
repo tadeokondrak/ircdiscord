@@ -31,7 +31,7 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 		return err
 	}
 	for _, line := range strings.Split(message, "\n") {
-		if err := c.WriteMessage(&irc.Message{
+		if err := c.irc.WriteMessage(&irc.Message{
 			Tags:    tags,
 			Prefix:  c.discordUserPrefix(&m.Author),
 			Command: "PRIVMSG",

@@ -21,7 +21,7 @@ func (c *Client) sendJoin(channel *discord.Channel) error {
 		return err
 	}
 
-	err = c.WriteMessage(&irc.Message{
+	err = c.irc.WriteMessage(&irc.Message{
 		Prefix:  c.clientPrefix,
 		Command: "JOIN",
 		Params:  []string{name},
@@ -31,7 +31,7 @@ func (c *Client) sendJoin(channel *discord.Channel) error {
 	}
 
 	if channel.Topic != "" {
-		err = c.WriteMessage(&irc.Message{
+		err = c.irc.WriteMessage(&irc.Message{
 			Prefix:  c.serverPrefix,
 			Command: irc.RPL_TOPIC,
 			Params: []string{
@@ -42,7 +42,7 @@ func (c *Client) sendJoin(channel *discord.Channel) error {
 		})
 	}
 
-	if err := c.WriteMessage(&irc.Message{
+	if err := c.irc.WriteMessage(&irc.Message{
 		Prefix:  c.serverPrefix,
 		Command: "329", // RPL_CREATIONTIME
 		Params: []string{
@@ -80,7 +80,7 @@ func (c *Client) handleIRCMessage(msg *irc.Message) error {
 }
 
 func (c *Client) handleIRCPing(msg *irc.Message) error {
-	return c.WriteMessage(&irc.Message{
+	return c.irc.WriteMessage(&irc.Message{
 		Command: "PONG",
 		Params:  msg.Params,
 	})
@@ -138,7 +138,7 @@ var editRegex = regexp.MustCompile(`^s/((?:\\/|[^/])*)/((?:\\/|[^/])*)(?:/(g?))?
 
 func (c *Client) handleIRCRegexEdit(msg *irc.Message) error {
 	bail := func(format string, args ...interface{}) error {
-		return c.WriteMessage(&irc.Message{
+		return c.irc.WriteMessage(&irc.Message{
 			Prefix:  c.serverPrefix,
 			Command: "NOTICE",
 			Params:  []string{msg.Params[0], fmt.Sprintf(format, args...)}},
@@ -233,7 +233,7 @@ func (c *Client) handleIRCList(msg *irc.Message) error {
 		return err
 	}
 
-	if err := c.WriteMessage(&irc.Message{
+	if err := c.irc.WriteMessage(&irc.Message{
 		Prefix:  c.serverPrefix,
 		Command: irc.RPL_LISTSTART,
 		Params:  []string{c.clientPrefix.Name, fmt.Sprintf("Channel list for %s", guild.Name)},
@@ -254,7 +254,7 @@ func (c *Client) handleIRCList(msg *irc.Message) error {
 		if err != nil {
 			return err
 		}
-		if err := c.WriteMessage(&irc.Message{
+		if err := c.irc.WriteMessage(&irc.Message{
 			Prefix:  c.serverPrefix,
 			Command: irc.RPL_LIST,
 			Params: []string{c.clientPrefix.Name, name, fmt.Sprint(channel.Position),
@@ -263,7 +263,7 @@ func (c *Client) handleIRCList(msg *irc.Message) error {
 			return err
 		}
 	}
-	if err := c.WriteMessage(&irc.Message{
+	if err := c.irc.WriteMessage(&irc.Message{
 		Prefix:  c.serverPrefix,
 		Command: irc.RPL_LISTEND,
 		Params:  []string{c.clientPrefix.Name, "End of /LIST"},

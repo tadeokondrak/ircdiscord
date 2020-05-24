@@ -12,11 +12,11 @@ import (
 )
 
 func (c *Client) sendJoin(channel *discord.Channel) error {
-	if c.guild == nil {
+	if !c.guild.Valid() {
 		return errors.New("JOIN for non-guilds is currently unsupported")
 	}
 
-	name, err := c.session.ChannelName(c.guild.ID, channel.ID)
+	name, err := c.session.ChannelName(c.guild, channel.ID)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (c *Client) handleIRCJoin(msg *irc.Message) error {
 		if !strings.HasPrefix(name, "#") {
 			return fmt.Errorf("invalid channel name")
 		}
-		channelID := c.session.ChannelFromName(c.guild.ID, name[1:])
+		channelID := c.session.ChannelFromName(c.guild, name[1:])
 		channel, err := c.session.Channel(channelID)
 		if err != nil {
 			return err
@@ -121,9 +121,9 @@ func (c *Client) handleIRCPrivmsg(msg *irc.Message) error {
 	}
 	text = actionRegex.ReplaceAllString(text, "*$1*")
 	text = c.replaceIRCMentions(text)
-	channel := c.session.ChannelFromName(c.guild.ID, strings.TrimPrefix(msg.Params[0], "#"))
+	channel := c.session.ChannelFromName(c.guild, strings.TrimPrefix(msg.Params[0], "#"))
 	if !channel.Valid() {
-		panic("TODO make this an error not a panic lol")
+		return fmt.Errorf("Invalid channel")
 	}
 	dmsg, err := c.session.SendMessage(channel, msg.Params[1], nil)
 	if err != nil {
@@ -155,7 +155,7 @@ func (c *Client) handleIRCRegexEdit(msg *irc.Message) error {
 		return bail("failed to compile regex: %v", err)
 	}
 
-	channel := c.session.ChannelFromName(c.guild.ID, strings.TrimPrefix(msg.Params[0], "#"))
+	channel := c.session.ChannelFromName(c.guild, strings.TrimPrefix(msg.Params[0], "#"))
 	if !channel.Valid() {
 		return fmt.Errorf("failed to find channel #%s", msg.Params[0])
 	}
@@ -224,19 +224,23 @@ func (c *Client) replaceIRCMentions(s string) string {
 }
 
 func (c *Client) handleIRCList(msg *irc.Message) error {
-	if c.guild == nil {
+	if !c.guild.Valid() {
 		// TODO: support /LIST for non-guilds
 		return nil
+	}
+	guild, err := c.session.Guild(c.guild)
+	if err != nil {
+		return err
 	}
 
 	if err := c.WriteMessage(&irc.Message{
 		Prefix:  c.serverPrefix,
 		Command: irc.RPL_LISTSTART,
-		Params:  []string{c.clientPrefix.Name, fmt.Sprintf("Channel list for %s", c.guild.Name)},
+		Params:  []string{c.clientPrefix.Name, fmt.Sprintf("Channel list for %s", guild.Name)},
 	}); err != nil {
 		return err
 	}
-	channels, err := c.session.Channels(c.guild.ID)
+	channels, err := c.session.Channels(c.guild)
 	if err != nil {
 		return err
 	}
@@ -246,7 +250,7 @@ func (c *Client) handleIRCList(msg *irc.Message) error {
 		} else if !visible {
 			continue
 		}
-		name, err := c.session.ChannelName(c.guild.ID, channel.ID)
+		name, err := c.session.ChannelName(c.guild, channel.ID)
 		if err != nil {
 			return err
 		}

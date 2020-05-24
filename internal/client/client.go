@@ -13,27 +13,29 @@ import (
 )
 
 type Client struct {
-	conn           net.Conn
-	irc            *irc.Conn
-	session        *session.Session
-	guild          *discord.Guild
-	serverPrefix   *irc.Prefix
-	clientPrefix   *irc.Prefix
-	lastMessageID  discord.Snowflake // the ID of the last message this client sent
-	caps           map[string]bool
-	joinedChannels map[discord.Snowflake]bool
-	IRCDebug       bool
-	DiscordDebug   bool
+	conn         net.Conn
+	irc          *irc.Conn
+	session      *session.Session
+	guild        discord.Snowflake
+	serverPrefix *irc.Prefix
+	clientPrefix *irc.Prefix
+	// the ID of the last message sent by this client
+	// this is used to prevent duplicate messages for clients who don't support
+	// ircv3 echo-message
+	lastMessageID discord.Snowflake
+	// ircv3 capabilities
+	caps         map[string]bool
+	IRCDebug     bool
+	DiscordDebug bool
 }
 
 func New(conn net.Conn) *Client {
 	return &Client{
-		conn:           conn,
-		irc:            irc.NewConn(conn),
-		serverPrefix:   &irc.Prefix{Name: conn.LocalAddr().String()},
-		clientPrefix:   &irc.Prefix{Name: conn.RemoteAddr().String()},
-		caps:           make(map[string]bool),
-		joinedChannels: make(map[discord.Snowflake]bool),
+		conn:         conn,
+		irc:          irc.NewConn(conn),
+		serverPrefix: &irc.Prefix{Name: conn.LocalAddr().String()},
+		clientPrefix: &irc.Prefix{Name: conn.RemoteAddr().String()},
+		caps:         make(map[string]bool),
 	}
 }
 
@@ -143,7 +145,7 @@ func (c *Client) Run() error {
 				c.session.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
 					GuildID: guild.ID,
 				})
-				c.guild = guild
+				c.guild = guild.ID
 			}
 			passed = true
 		default:
@@ -219,8 +221,8 @@ func (c *Client) channelIsVisible(channel *discord.Channel) (bool, error) {
 }
 
 func (c *Client) seedState() error {
-	if c.guild != nil {
-		channels, err := c.session.Channels(c.guild.ID)
+	if c.guild.Valid() {
+		channels, err := c.session.Channels(c.guild)
 		if err != nil {
 			return err
 		}
@@ -228,7 +230,7 @@ func (c *Client) seedState() error {
 			if visible, err := c.channelIsVisible(&channel); err != nil {
 				return err
 			} else if visible {
-				c.session.ChannelMap(c.guild.ID).Insert(channel.ID, channel.Name)
+				c.session.ChannelMap(c.guild).Insert(channel.ID, channel.Name)
 			}
 		}
 	}
@@ -243,9 +245,13 @@ func (c *Client) sendGreeting() error {
 
 	guildName := "Discord"
 	guildID := me.ID
-	if c.guild != nil {
-		guildName = c.guild.Name
-		guildID = c.guild.ID
+	if c.guild.Valid() {
+		guild, err := c.session.Guild(c.guild)
+		if err != nil {
+			return err
+		}
+		guildName = guild.Name
+		guildID = c.guild
 	}
 
 	if err := c.WriteMessage(&irc.Message{

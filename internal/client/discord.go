@@ -50,11 +50,13 @@ func (c *Client) handleDiscordEvent(e gateway.Event) error {
 	case *gateway.ResumedEvent:
 	case *gateway.InvalidSessionEvent:
 	case *gateway.ChannelCreateEvent:
-		var channel discord.Channel = *(*discord.Channel)(e)
-		if visible, err := c.channelIsVisible(&channel); err != nil {
-			return err
-		} else if visible {
-			c.session.ChannelMap(c.guild.ID).Insert(channel.ID, channel.Name)
+		if c.guild.Valid() {
+			var channel discord.Channel = *(*discord.Channel)(e)
+			if visible, err := c.channelIsVisible(&channel); err != nil {
+				return err
+			} else if visible {
+				c.session.ChannelMap(c.guild).Insert(channel.ID, channel.Name)
+			}
 		}
 	case *gateway.ChannelUpdateEvent:
 		// TODO: remove from map
@@ -104,10 +106,10 @@ func (c *Client) handleDiscordEvent(e gateway.Event) error {
 }
 
 func (c *Client) handleDiscordMessage(m *discord.Message) error {
-	if c.guild == nil {
+	if !c.guild.Valid() {
 		return nil
 	}
-	if c.guild != nil && m.GuildID != c.guild.ID {
+	if m.GuildID != c.guild {
 		return nil
 	}
 	if m.ID == c.lastMessageID && !c.caps["echo-message"] {

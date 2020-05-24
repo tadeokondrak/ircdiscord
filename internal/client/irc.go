@@ -81,6 +81,7 @@ func (c *Client) handleIRCMessage(msg *irc.Message) error {
 
 func (c *Client) handleIRCPing(msg *irc.Message) error {
 	return c.irc.WriteMessage(&irc.Message{
+		Prefix:  c.serverPrefix,
 		Command: "PONG",
 		Params:  msg.Params,
 	})

@@ -20,7 +20,8 @@ func CAP_LS(w Writer, supported []string) error {
 	return w.WriteMessage(&irc.Message{
 		Prefix:  w.ServerPrefix(),
 		Command: "CAP",
-		Params:  []string{w.ClientPrefix().Name, "LS", strings.Join(supported, " ")},
+		Params: []string{w.ClientPrefix().Name, "LS",
+			strings.Join(supported, " ")},
 	})
 }
 
@@ -28,7 +29,8 @@ func CAP_ACK(w Writer, acked []string) error {
 	return w.WriteMessage(&irc.Message{
 		Prefix:  w.ServerPrefix(),
 		Command: "CAP",
-		Params:  []string{w.ClientPrefix().Name, "ACK", strings.Join(acked, " ")},
+		Params: []string{w.ClientPrefix().Name, "ACK",
+			strings.Join(acked, " ")},
 	})
 }
 
@@ -43,7 +45,8 @@ func JOIN(w Writer, channels []string) error {
 func PRIVMSG(w Writer, t time.Time, prefix *irc.Prefix, channel, message string) error {
 	tags := make(irc.Tags)
 	if w.HasCapability("server-time") && !t.IsZero() {
-		tags["time"] = irc.TagValue(t.UTC().Format("2006-01-02T15:04:05.000Z"))
+		tags["time"] =
+			irc.TagValue(t.UTC().Format("2006-01-02T15:04:05.000Z"))
 	}
 	return w.WriteMessage(&irc.Message{
 		Tags:    tags,

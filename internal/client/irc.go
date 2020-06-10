@@ -117,7 +117,7 @@ func (c *Client) handleIRCPrivmsg(msg *irc.Message) error {
 	if !channel.Valid() {
 		return fmt.Errorf("Invalid channel")
 	}
-	dmsg, err := c.session.SendMessage(channel, msg.Params[1], nil)
+	dmsg, err := c.session.SendMessage(channel, text, nil)
 	if err != nil {
 		return err
 	}
@@ -202,12 +202,16 @@ var pingRegex = regexp.MustCompile(`@[^ ]*`)
 func (c *Client) replaceIRCMentions(s string) string {
 	return pingRegex.ReplaceAllStringFunc(s, func(match string) string {
 		if match == "@" {
+			fmt.Println("match is @")
 			return match
 		}
 		id := c.session.UserFromName(match[1:])
+		fmt.Printf("match is %d\n", id)
 		if !id.Valid() {
+			fmt.Printf("match is invalid\n")
 			return match
 		}
+		fmt.Printf("match is valid\n")
 		return fmt.Sprintf("<@%d>", id)
 	})
 }

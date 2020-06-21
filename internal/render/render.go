@@ -117,11 +117,11 @@ func Content(sess *session.Session, source []byte, m *discord.Message) string {
 			}
 		case *ast.String:
 			if enter {
-				s.Write(n.Value)
+				s.Write(md.Unescape(n.Value))
 			}
 		case *ast.Text:
 			if enter {
-				s.Write(n.Segment.Value(source))
+				s.Write(md.Unescape(n.Segment.Value(source)))
 				switch {
 				case n.HardLineBreak():
 					s.WriteString("\n\n")

@@ -19,6 +19,12 @@ func (c *Client) discordUserPrefix(u *discord.User) *irc.Prefix {
 }
 
 func (c *Client) sendDiscordMessage(m *discord.Message) error {
+	// TODO: arikawa should store relationships in its state
+	for _, rel := range c.session.Ready.Relationships {
+		if rel.User.ID == m.Author.ID && rel.Type == gateway.BlockedRelationship {
+			return nil
+		}
+	}
 	channelName, err := c.session.ChannelName(m.GuildID, m.ChannelID)
 	if err != nil {
 		return err

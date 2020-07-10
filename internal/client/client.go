@@ -75,13 +75,6 @@ var supportedCaps = []string{
 	"server-time",
 	"message-tags",
 }
-var supportedCapsSet = func() map[string]bool {
-	set := make(map[string]bool)
-	for _, capability := range supportedCaps {
-		set[capability] = true
-	}
-	return set
-}()
 
 func (c *Client) Run() error {
 	defer c.Close()
@@ -116,7 +109,14 @@ func (c *Client) Run() error {
 				}
 				requested := strings.Split(msg.Params[1], " ")
 				for _, capability := range requested {
-					if !supportedCapsSet[capability] {
+					supported := false
+					for _, supportedCap := range supportedCaps {
+						if supportedCap == capability {
+							supported = true
+							break
+						}
+					}
+					if !supported {
 						return fmt.Errorf("invalid capability requested: %s", capability)
 					}
 					c.caps[capability] = true

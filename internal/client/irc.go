@@ -245,7 +245,6 @@ func (c *Client) handleRegexEdit(channelName string,
 	}
 
 	beforeEdit := message.Content
-	fmt.Println(message)
 
 	var result string
 

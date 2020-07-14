@@ -26,14 +26,14 @@ func (c *Client) HandleMessage(msg *irc.Message) error {
 		return c.handlePrivmsg(msg)
 	case "LIST":
 		return c.handleList(msg)
+	case "WHOIS":
+		return c.handleWhois(msg)
 	default:
 		return nil
 	}
 }
 
 func (c *Client) maybeCompleteRegistration() error {
-	fmt.Println("maybecomplete")
-	fmt.Println(c.isRegistered, c.nickname, c.username, c.realname, c.isCapBlocked)
 	if c.isRegistered ||
 		c.nickname == "" ||
 		c.username == "" ||
@@ -41,7 +41,6 @@ func (c *Client) maybeCompleteRegistration() error {
 		c.isCapBlocked {
 		return nil
 	}
-	fmt.Println("maybecompleteyes")
 
 	if err := c.Server.HandleRegister(); err != nil {
 		return err

@@ -20,7 +20,7 @@ type Client struct {
 	lastMessageID discord.Snowflake // used to prevent duplicate messages
 	capabilities  map[string]bool   // ircv3 capabilities
 	discordDebug  bool              // whether to log Discord interaction
-	errors        chan error
+	errors        chan error        // send errors here from goroutines
 }
 
 func New(conn net.Conn, ircDebug, discordDebug bool) *Client {

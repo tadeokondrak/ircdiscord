@@ -37,7 +37,7 @@ func (c *Client) HandleRegister() error {
 		return err
 	}
 
-	c.client.SetClientPrefix(c.discordUserPrefix(me))
+	c.ilayer.SetClientPrefix(c.discordUserPrefix(me))
 
 	return nil
 }
@@ -94,7 +94,7 @@ func (c *Client) HandlePing(nonce string) (string, error) {
 }
 
 func (c *Client) HandleJoin(name string) error {
-	if c.client.InChannel(name) {
+	if c.ilayer.InChannel(name) {
 		return nil
 	}
 
@@ -132,7 +132,7 @@ func (c *Client) HandleJoin(name string) error {
 		}
 	}
 
-	if err := c.client.Join(channelName, channel.Topic,
+	if err := c.ilayer.Join(channelName, channel.Topic,
 		channel.ID.Time()); err != nil {
 		return err
 	}

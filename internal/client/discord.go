@@ -42,7 +42,7 @@ func (c *Client) sendDiscordMessage(m *discord.Message, autojoin bool) error {
 		channelName = c.session.UserName(c.guild, recip.ID, recip.Username)
 	}
 
-	if autojoin && !c.guild.Valid() && !c.client.InChannel(channelName) {
+	if autojoin && !c.guild.Valid() && !c.ilayer.InChannel(channelName) {
 		return c.HandleJoin(channelName)
 	}
 
@@ -51,7 +51,7 @@ func (c *Client) sendDiscordMessage(m *discord.Message, autojoin bool) error {
 		return err
 	}
 
-	return c.client.Message(channelName, message,
+	return c.ilayer.Message(channelName, message,
 		c.discordUserPrefix(&m.Author), m.ID.Time())
 }
 
@@ -125,7 +125,7 @@ func (c *Client) handleDiscordMessage(m *discord.Message) error {
 		}
 	}
 
-	if m.ID == c.lastMessageID && !c.client.HasCapability("echo-message") {
+	if m.ID == c.lastMessageID && !c.ilayer.HasCapability("echo-message") {
 		return nil
 	}
 

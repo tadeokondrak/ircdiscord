@@ -14,7 +14,7 @@ import (
 type Client struct {
 	netconn       net.Conn
 	ircconn       *irc.Conn
-	client        *ilayer.Client
+	ilayer        *ilayer.Client
 	session       *session.Session  // nil pre-login
 	guild         discord.Snowflake // invalid for DM server and pre-login
 	lastMessageID discord.Snowflake // used to prevent duplicate messages
@@ -31,13 +31,13 @@ func New(conn net.Conn, ircDebug, discordDebug bool) *Client {
 	c := &Client{
 		netconn:      conn,
 		ircconn:      ircconn,
-		client:       client,
+		ilayer:       client,
 		capabilities: make(map[string]bool),
 		discordDebug: discordDebug,
 		errors:       make(chan error),
 	}
 
-	c.client.Server = c
+	c.ilayer.Server = c
 
 	if ircDebug {
 		c.ircconn.Reader.DebugCallback = func(line string) {
@@ -64,14 +64,14 @@ func (c *Client) isGuild() bool {
 }
 
 func (c *Client) Run() error {
-	log.Printf("connected: %v", c.client.ClientPrefix().Name)
-	defer log.Printf("disconnected: %v", c.client.ClientPrefix().Name)
+	log.Printf("connected: %v", c.ilayer.ClientPrefix().Name)
+	defer log.Printf("disconnected: %v", c.ilayer.ClientPrefix().Name)
 
 	msgs := make(chan *irc.Message)
 
 	go func() {
 		for {
-			msg, err := c.client.ReadMessage()
+			msg, err := c.ilayer.ReadMessage()
 			if err != nil {
 				c.errors <- err
 				return
@@ -80,10 +80,10 @@ func (c *Client) Run() error {
 		}
 	}()
 
-	for !c.client.IsRegistered() {
+	for !c.ilayer.IsRegistered() {
 		select {
 		case msg := <-msgs:
-			if err := c.client.HandleMessage(msg); err != nil {
+			if err := c.ilayer.HandleMessage(msg); err != nil {
 				return err
 			}
 		case err := <-c.errors:
@@ -102,7 +102,7 @@ func (c *Client) Run() error {
 	for {
 		select {
 		case msg := <-msgs:
-			if err := c.client.HandleMessage(msg); err != nil {
+			if err := c.ilayer.HandleMessage(msg); err != nil {
 				return err
 			}
 		case event := <-events:

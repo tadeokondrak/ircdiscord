@@ -14,7 +14,7 @@ import (
 )
 
 type Client struct {
-	*irc.Conn
+	ircconn        *irc.Conn
 	netconn        net.Conn
 	session        *session.Session
 	guild          discord.Snowflake
@@ -33,19 +33,19 @@ type Client struct {
 
 func New(conn net.Conn) *Client {
 	c := &Client{
-		Conn:           irc.NewConn(conn),
+		ircconn:        irc.NewConn(conn),
 		netconn:        conn,
 		serverPrefix:   &irc.Prefix{Name: conn.LocalAddr().String()},
 		clientPrefix:   &irc.Prefix{Name: conn.RemoteAddr().String()},
 		joinedChannels: make(map[string]bool),
 		caps:           make(map[string]bool),
 	}
-	c.Conn.Reader.DebugCallback = func(line string) {
+	c.ircconn.Reader.DebugCallback = func(line string) {
 		if c.IRCDebug {
 			log.Printf("<-i %s", line)
 		}
 	}
-	c.Conn.Writer.DebugCallback = func(line string) {
+	c.ircconn.Writer.DebugCallback = func(line string) {
 		if c.IRCDebug {
 			log.Printf("->i %s", line)
 		}
@@ -70,6 +70,14 @@ func (c *Client) ClientPrefix() *irc.Prefix {
 
 func (c *Client) ServerPrefix() *irc.Prefix {
 	return c.serverPrefix
+}
+
+func (c *Client) ReadMessage() (*irc.Message, error) {
+	return c.ircconn.ReadMessage()
+}
+
+func (c *Client) WriteMessage(m *irc.Message) error {
+	return c.ircconn.WriteMessage(m)
 }
 
 var supportedCaps = []string{

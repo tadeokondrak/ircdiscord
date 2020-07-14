@@ -14,7 +14,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 )
 
-func Content(sess *session.Session, source []byte, m *discord.Message) string {
+func Content(guildID discord.Snowflake, sess *session.Session, source []byte, m *discord.Message) string {
 	parsed := md.ParseWithMessage(source, sess, m, false)
 	var s strings.Builder
 	var walker func(n ast.Node, enter bool) (ast.WalkStatus, error)
@@ -112,7 +112,7 @@ func Content(sess *session.Session, source []byte, m *discord.Message) string {
 				case n.Channel != nil:
 					fmt.Fprintf(&s, "\x02\x0302#%s\x03\x02", n.Channel.Name)
 				case n.GuildUser != nil:
-					fmt.Fprintf(&s, "\x02\x0302@%s\x03\x02", sess.UserName(n.GuildUser.User.ID, n.GuildUser.User.Username))
+					fmt.Fprintf(&s, "\x02\x0302@%s\x03\x02", sess.UserName(guildID, n.GuildUser.User.ID, n.GuildUser.User.Username))
 				}
 			}
 		case *ast.String:
@@ -136,12 +136,12 @@ func Content(sess *session.Session, source []byte, m *discord.Message) string {
 	return s.String()
 }
 
-func Message(sess *session.Session, m *discord.Message) (string, error) {
+func Message(guildID discord.Snowflake, sess *session.Session, m *discord.Message) (string, error) {
 	if m.Type != discord.DefaultMessage {
 		return "", nil
 	}
 	var s strings.Builder
-	s.WriteString(Content(sess, []byte(m.Content), m))
+	s.WriteString(Content(guildID, sess, []byte(m.Content), m))
 	for _, e := range m.Embeds {
 		var es strings.Builder
 		if e.Title != "" {
@@ -153,7 +153,7 @@ func Message(sess *session.Session, m *discord.Message) (string, error) {
 		}
 
 		if e.Description != "" {
-			es.WriteString(Content(sess, []byte(e.Description), m))
+			es.WriteString(Content(guildID, sess, []byte(e.Description), m))
 			es.WriteString("\n")
 		}
 
@@ -162,7 +162,7 @@ func Message(sess *session.Session, m *discord.Message) (string, error) {
 			if !f.Inline {
 				es.WriteString("\n")
 			}
-			es.WriteString(Content(sess, []byte(f.Value), m))
+			es.WriteString(Content(guildID, sess, []byte(f.Value), m))
 			es.WriteString("\n")
 		}
 		embed := strings.Split(strings.Trim(es.String(), "\n"), "\n")

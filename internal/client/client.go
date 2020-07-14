@@ -20,11 +20,10 @@ type Client struct {
 	guild         discord.Snowflake // invalid for DM server and pre-login
 	lastMessageID discord.Snowflake // used to prevent duplicate messages
 	capabilities  map[string]bool   // ircv3 capabilities
-	IRCDebug      bool              // whether to log IRC interaction
-	DiscordDebug  bool              // whether to log Discord interaction
+	discordDebug  bool              // whether to log Discord interaction
 }
 
-func New(conn net.Conn) *Client {
+func New(conn net.Conn, ircDebug, discordDebug bool) *Client {
 	ircconn := irc.NewConn(conn)
 	client := server.NewClient(ircconn,
 		conn.LocalAddr().String(), conn.RemoteAddr().String())
@@ -34,18 +33,16 @@ func New(conn net.Conn) *Client {
 		ircconn:      ircconn,
 		client:       client,
 		capabilities: make(map[string]bool),
+		discordDebug: discordDebug,
 	}
 
 	c.client.Server = c
 
-	c.ircconn.Reader.DebugCallback = func(line string) {
-		if c.IRCDebug {
+	if ircDebug {
+		c.ircconn.Reader.DebugCallback = func(line string) {
 			log.Printf("<-i %s", line)
 		}
-	}
-
-	c.ircconn.Writer.DebugCallback = func(line string) {
-		if c.IRCDebug {
+		c.ircconn.Writer.DebugCallback = func(line string) {
 			log.Printf("->i %s", line)
 		}
 	}
@@ -165,7 +162,7 @@ func (c *Client) seedState() error {
 				continue
 			}
 			recip := channel.DMRecipients[0]
-			c.session.UserName(recip.ID, recip.Username)
+			c.session.UserName(c.guild, recip.ID, recip.Username)
 		}
 	}
 
@@ -215,7 +212,7 @@ func (c *Client) MOTD() ([]string, error) {
 func (c *Client) HandleWhois(username string) (server.WhoisReply, error) {
 	var reply server.WhoisReply
 
-	userID := c.session.UserFromName(username)
+	userID := c.session.UserFromName(c.guild, username)
 	if !userID.Valid() {
 		return server.WhoisReply{},
 			fmt.Errorf("no user named %s found", username)

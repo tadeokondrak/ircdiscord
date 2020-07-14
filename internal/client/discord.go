@@ -9,8 +9,8 @@ import (
 
 func (c *Client) discordUserPrefix(u *discord.User) *irc.Prefix {
 	return &irc.Prefix{
-		User: c.session.UserName(u.ID, u.Username),
-		Name: c.session.UserName(u.ID, u.Username),
+		User: c.session.UserName(c.guild, u.ID, u.Username),
+		Name: c.session.UserName(c.guild, u.ID, u.Username),
 		Host: u.ID.String(),
 	}
 }
@@ -39,14 +39,14 @@ func (c *Client) sendDiscordMessage(m *discord.Message, autojoin bool) error {
 		}
 	} else {
 		recip := channel.DMRecipients[0]
-		channelName = c.session.UserName(recip.ID, recip.Username)
+		channelName = c.session.UserName(c.guild, recip.ID, recip.Username)
 	}
 
 	if autojoin && !c.guild.Valid() && !c.client.InChannel(channelName) {
 		return c.HandleJoin(channelName)
 	}
 
-	message, err := render.Message(c.session, m)
+	message, err := render.Message(c.guild, c.session, m)
 	if err != nil {
 		return err
 	}

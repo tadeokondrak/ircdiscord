@@ -23,12 +23,12 @@ import (
 // nick/channel names to Discord IDs.
 type Session struct {
 	*state.State
-	nickMap          *idmap.IDMap
+	nickMaps         map[discord.Snowflake]*idmap.IDMap
+	nickMapsMutex    sync.RWMutex
 	channelMaps      map[discord.Snowflake]*idmap.IDMap
 	channelMapsMutex sync.RWMutex
 	id               discord.Snowflake
 	refs             uint32
-	debug            bool
 }
 
 var (
@@ -75,11 +75,10 @@ func Get(token string, debug bool) (*Session, error) {
 
 	session := &Session{
 		State:       state,
-		nickMap:     idmap.New(),
+		nickMaps:    make(map[discord.Snowflake]*idmap.IDMap),
 		channelMaps: make(map[discord.Snowflake]*idmap.IDMap),
 		refs:        0,
 	}
-	session.nickMap.Concurrent = true
 
 	me, err := state.Me()
 	if err != nil {
@@ -116,34 +115,52 @@ func (s *Session) Close() error {
 	return s.State.Close()
 }
 
-// UserName returns the IRC name for the given Discord user.
-func (s *Session) UserName(id discord.Snowflake, name string) string {
+func safeGetMap(maps map[discord.Snowflake]*idmap.IDMap,
+	id discord.Snowflake, mu *sync.RWMutex) *idmap.IDMap {
+	mu.RLock()
+	m, ok := maps[id]
+	mu.RUnlock()
+	if ok {
+		return m
+	}
+
+	mu.Lock()
+	maps[id] = idmap.New()
+	maps[id].Concurrent = true
+	mu.Unlock()
+	return maps[id]
+}
+
+func (s *Session) nickMap(guild discord.Snowflake) *idmap.IDMap {
+	return safeGetMap(s.nickMaps, guild, &s.nickMapsMutex)
+}
+
+func (s *Session) channelMap(guild discord.Snowflake) *idmap.IDMap {
+	return safeGetMap(s.channelMaps, guild, &s.channelMapsMutex)
+}
+
+// UserName returns the IRC nickname for the given Discord user.
+func (s *Session) UserName(guild discord.Snowflake, id discord.Snowflake, name string) string {
 	if !id.Valid() {
 		return sanitizeNick(name)
 	}
-	return s.nickMap.Insert(id, sanitizeNick(name))
+
+	nickMap := s.nickMap(guild)
+
+	if name := nickMap.Name(id); name != "" {
+		return name
+	}
+
+	return nickMap.Insert(id, sanitizeNick(name))
 }
 
-func (s *Session) UserFromName(name string) discord.Snowflake {
-	return s.nickMap.Snowflake(name)
+// UserFromName returns the Discord user for the given IRC nickname.
+func (s *Session) UserFromName(guild discord.Snowflake, name string) discord.Snowflake {
+	nickMap := s.nickMap(guild)
+	return nickMap.Snowflake(name)
 }
 
 var ErrNoChannel = errors.New("no channel by that name exists")
-
-func (s *Session) channelMap(guild discord.Snowflake) *idmap.IDMap {
-	s.channelMapsMutex.RLock()
-	themap, ok := s.channelMaps[guild]
-	s.channelMapsMutex.RUnlock()
-	if ok {
-		return themap
-	}
-
-	s.channelMapsMutex.Lock()
-	defer s.channelMapsMutex.Unlock()
-	s.channelMaps[guild] = idmap.New()
-	s.channelMaps[guild].Concurrent = true
-	return s.channelMaps[guild]
-}
 
 // ChannelFromName returns the Discord channel for a given IRC channel name.
 func (s *Session) ChannelFromName(guild discord.Snowflake, name string) discord.Snowflake {
@@ -168,7 +185,7 @@ func (s *Session) ChannelName(guild discord.Snowflake, id discord.Snowflake) (st
 	return fmt.Sprintf("#%s", channelMap.Insert(channel.ID, channel.Name)), nil
 }
 
-// sanitizeNick removes invalid-for-IRC-nick characters from a string.
+// sanitizeNick removes characters invalid in an IRC nickname from a string.
 func sanitizeNick(s string) string {
 	return strings.Map(func(r rune) rune {
 		if unicode.IsLetter(r) ||

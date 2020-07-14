@@ -57,7 +57,7 @@ func (m *IDMap) Snowflake(name string) discord.Snowflake {
 	if flake, ok := m.backward[name]; ok {
 		return flake
 	}
-	return discord.NullSnowflake
+	return discord.Snowflake(0)
 }
 
 // Insert returns an IRC name for a given Discord ID.

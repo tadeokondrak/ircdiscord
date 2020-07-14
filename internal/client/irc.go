@@ -19,7 +19,7 @@ func (c *Client) replaceIRCMentions(s string) string {
 		if match == "@" {
 			return match
 		}
-		id := c.session.UserFromName(match[1:])
+		id := c.session.UserFromName(c.guild, match[1:])
 		if !id.Valid() {
 			return match
 		}
@@ -61,7 +61,7 @@ func (c *Client) HandlePassword(password string) (string, error) {
 	}
 
 	args := strings.SplitN(password, ":", 2)
-	session, err := session.Get(args[0], c.DiscordDebug)
+	session, err := session.Get(args[0], c.discordDebug)
 	if err != nil {
 		return "", err
 	}
@@ -102,7 +102,7 @@ func (c *Client) HandleJoin(name string) error {
 	var channelName string
 
 	if !c.isGuild() {
-		user := c.session.UserFromName(name)
+		user := c.session.UserFromName(c.guild, name)
 		if !user.Valid() {
 			return fmt.Errorf("no user named %s found", name)
 		}
@@ -159,7 +159,7 @@ func (c *Client) HandleMessage(channel, content string) error {
 	if c.isGuild() {
 		channelID = c.session.ChannelFromName(c.guild, channel)
 	} else {
-		user := c.session.UserFromName(channel)
+		user := c.session.UserFromName(c.guild, channel)
 		if !user.Valid() {
 			return fmt.Errorf("no user named %s", channel)
 		}
@@ -296,7 +296,7 @@ func (c *Client) HandleList() ([]server.ListEntry, error) {
 				return nil, err
 			}
 
-			topic := render.Content(c.session,
+			topic := render.Content(c.guild, c.session,
 				[]byte(channel.Topic), nil)
 			entry.Topic = strings.ReplaceAll(topic, "\n", " ")
 
@@ -318,7 +318,7 @@ func (c *Client) HandleList() ([]server.ListEntry, error) {
 			recip := channel.DMRecipients[0]
 
 			entry.Channel = c.session.UserName(
-				recip.ID, recip.Username)
+				c.guild, recip.ID, recip.Username)
 			entry.Topic = fmt.Sprintf("Direct message with %s#%s",
 				recip.Username, recip.Discriminator)
 

@@ -20,9 +20,7 @@ var (
 )
 
 func runClient(conn net.Conn) {
-	c := client.New(conn)
-	c.IRCDebug = ircDebug
-	c.DiscordDebug = discordDebug
+	c := client.New(conn, ircDebug, discordDebug)
 	if err := c.Run(); err != nil {
 		log.Println(err)
 	}

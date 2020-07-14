@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/tadeokondrak/ircdiscord/internal/server"
+	"github.com/tadeokondrak/ircdiscord/internal/ilayer"
 	"github.com/tadeokondrak/ircdiscord/internal/session"
 	"gopkg.in/irc.v3"
 )
@@ -14,7 +14,7 @@ import (
 type Client struct {
 	netconn       net.Conn
 	ircconn       *irc.Conn
-	client        *server.Client
+	client        *ilayer.Client
 	session       *session.Session  // nil pre-login
 	guild         discord.Snowflake // invalid for DM server and pre-login
 	lastMessageID discord.Snowflake // used to prevent duplicate messages
@@ -25,7 +25,7 @@ type Client struct {
 
 func New(conn net.Conn, ircDebug, discordDebug bool) *Client {
 	ircconn := irc.NewConn(conn)
-	client := server.NewClient(ircconn,
+	client := ilayer.NewClient(ircconn,
 		conn.LocalAddr().String(), conn.RemoteAddr().String())
 
 	c := &Client{

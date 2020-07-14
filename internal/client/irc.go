@@ -7,8 +7,8 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/tadeokondrak/ircdiscord/internal/ilayer"
 	"github.com/tadeokondrak/ircdiscord/internal/render"
-	"github.com/tadeokondrak/ircdiscord/internal/server"
 	"github.com/tadeokondrak/ircdiscord/internal/session"
 )
 
@@ -263,8 +263,8 @@ func (c *Client) handleRegexEdit(channelName string,
 	return err
 }
 
-func (c *Client) HandleList() ([]server.ListEntry, error) {
-	entries := []server.ListEntry{}
+func (c *Client) HandleList() ([]ilayer.ListEntry, error) {
+	entries := []ilayer.ListEntry{}
 	if c.isGuild() {
 		channels, err := c.session.Channels(c.guild)
 		if err != nil {
@@ -278,7 +278,7 @@ func (c *Client) HandleList() ([]server.ListEntry, error) {
 				continue
 			}
 
-			var entry server.ListEntry
+			var entry ilayer.ListEntry
 			var err error
 			entry.Channel, err = c.session.ChannelName(
 				c.guild, channel.ID)
@@ -303,7 +303,7 @@ func (c *Client) HandleList() ([]server.ListEntry, error) {
 				continue
 			}
 
-			var entry server.ListEntry
+			var entry ilayer.ListEntry
 
 			recip := channel.DMRecipients[0]
 
@@ -318,18 +318,18 @@ func (c *Client) HandleList() ([]server.ListEntry, error) {
 	return entries, nil
 }
 
-func (c *Client) HandleWhois(username string) (server.WhoisReply, error) {
-	var reply server.WhoisReply
+func (c *Client) HandleWhois(username string) (ilayer.WhoisReply, error) {
+	var reply ilayer.WhoisReply
 
 	userID := c.session.UserFromName(c.guild, username)
 	if !userID.Valid() {
-		return server.WhoisReply{},
+		return ilayer.WhoisReply{},
 			fmt.Errorf("no user named %s found", username)
 	}
 
 	user, err := c.session.User(userID)
 	if err != nil {
-		return server.WhoisReply{}, err
+		return ilayer.WhoisReply{}, err
 	}
 
 	reply.Prefix = c.discordUserPrefix(user)

@@ -6,190 +6,215 @@ import (
 	"strings"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/gateway"
 	"github.com/tadeokondrak/ircdiscord/internal/render"
-	"github.com/tadeokondrak/ircdiscord/internal/replies"
-	"gopkg.in/irc.v3"
+	"github.com/tadeokondrak/ircdiscord/internal/server"
+	"github.com/tadeokondrak/ircdiscord/internal/session"
 )
 
-func (c *Client) sendJoin(channel *discord.Channel) error {
-	var name string
+var pingRegex = regexp.MustCompile(`@[^ ]*`)
 
-	if c.guild.Valid() {
-		var err error
-		name, err = c.session.ChannelName(channel.GuildID, channel.ID)
-		if err != nil {
-			return err
+func (c *Client) replaceIRCMentions(s string) string {
+	return pingRegex.ReplaceAllStringFunc(s, func(match string) string {
+		if match == "@" {
+			return match
 		}
-	} else if channel.Type == discord.DirectMessage {
-		recip := channel.DMRecipients[0]
-		name = c.session.UserName(recip.ID, recip.Username)
+		id := c.session.UserFromName(match[1:])
+		if !id.Valid() {
+			return match
+		}
+		return fmt.Sprintf("<@%d>", id)
+	})
+}
+
+func (c *Client) HandleRegister() error {
+	if c.session == nil {
+		return fmt.Errorf("no session provided")
 	}
 
-	if c.joinedChannels[name] {
-		return nil
-	}
-	c.joinedChannels[name] = true
-
-	if err := replies.JOIN(c, []string{name}); err != nil {
+	me, err := c.session.Me()
+	if err != nil {
 		return err
 	}
 
-	if channel.Topic != "" {
-		topic := strings.ReplaceAll(render.Content(c.session, []byte(channel.Topic), nil), "\n", " ")
-		if err := replies.RPL_TOPIC(c, name, topic); err != nil {
-			return err
-		}
-	}
+	c.client.SetClientPrefix(c.discordUserPrefix(me))
 
-	if err := replies.RPL_CREATIONTIME(c, name, channel.ID.Time()); err != nil {
-		return err
-	}
-
-	backlog, err := c.session.Messages(channel.ID)
-	for i := len(backlog) - 1; i >= 0; i-- {
-		if err := c.sendDiscordMessage(&backlog[i]); err != nil {
-			return err
-		}
-	}
-
-	return err
-}
-
-func (c *Client) handleIRCMessage(msg *irc.Message) error {
-	switch msg.Command {
-	case "PING":
-		return c.handleIRCPing(msg)
-	case "JOIN":
-		return c.handleIRCJoin(msg)
-	case "PRIVMSG":
-		return c.handleIRCPrivmsg(msg)
-	case "LIST":
-		return c.handleIRCList(msg)
-	default:
-		return nil
-	}
-}
-
-func (c *Client) handleIRCPing(msg *irc.Message) error {
-	if len(msg.Params) != 1 {
-		return fmt.Errorf("invalid parameter count for PING")
-	}
-	return replies.PONG(c, msg.Params[0])
-}
-
-func (c *Client) handleIRCJoin(msg *irc.Message) error {
-	if len(msg.Params) != 1 {
-		return fmt.Errorf("invalid parameter count for JOIN")
-	}
-	if !c.guild.Valid() {
-		return c.handleIRCJoinDM(msg)
-	}
-	for _, name := range strings.Split(msg.Params[0], ",") {
-		if !strings.HasPrefix(name, "#") {
-			return fmt.Errorf("invalid channel name")
-		}
-		channels, err := c.session.Channels(c.guild)
-		if err != nil {
-			return err
-		}
-		for _, channel := range channels {
-			channelName, err := c.session.ChannelName(c.guild, channel.ID)
-			if err != nil {
-				return err
-			}
-			if name != channelName {
-				continue
-			}
-			if err := c.sendJoin(&channel); err != nil {
-				return err
-			}
-			break
-		}
-	}
 	return nil
 }
 
-func (c *Client) handleIRCJoinDM(msg *irc.Message) error {
-	for _, name := range strings.Split(msg.Params[0], ",") {
+func (c *Client) HandleNickname(nickname string) (string, error) {
+	return nickname, nil
+}
+
+func (c *Client) HandleUsername(username string) (string, error) {
+	return username, nil
+}
+
+func (c *Client) HandleRealname(realname string) (string, error) {
+	return realname, nil
+}
+
+func (c *Client) HandlePassword(password string) (string, error) {
+	if c.session != nil {
+		c.session.Unref()
+		c.session = nil
+	}
+
+	args := strings.SplitN(password, ":", 2)
+	session, err := session.Get(args[0], c.DiscordDebug)
+	if err != nil {
+		return "", err
+	}
+
+	c.session = session
+
+	if len(args) > 1 {
+		snowflake, err := discord.ParseSnowflake(args[1])
+		if err != nil {
+			return "", err
+		}
+
+		guild, err := c.session.Guild(snowflake)
+		if err != nil {
+			return "", err
+		}
+
+		c.session.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
+			GuildID: guild.ID,
+		})
+
+		c.guild = guild.ID
+	}
+
+	return password, nil
+}
+
+func (c *Client) HandlePing(nonce string) (string, error) {
+	return nonce, nil
+}
+
+func (c *Client) HandleJoin(name string) error {
+	if c.client.InChannel(name) {
+		return nil
+	}
+
+	var channel *discord.Channel
+	var channelName string
+
+	if !c.isGuild() {
 		user := c.session.UserFromName(name)
 		if !user.Valid() {
 			return fmt.Errorf("no user named %s found", name)
 		}
-		channel, err := c.session.CreatePrivateChannel(user)
+
+		var err error
+		channel, err = c.session.CreatePrivateChannel(user)
 		if err != nil {
 			return err
 		}
-		if err := c.sendJoin(channel); err != nil {
+
+		channelName = name
+	} else {
+		channelID := c.session.ChannelFromName(c.guild, name)
+		if !channelID.Valid() {
+			return fmt.Errorf("no channel named %s found", name)
+		}
+
+		var err error
+		channel, err = c.session.Channel(channelID)
+		if err != nil {
 			return err
 		}
-		break
+
+		channelName, err = c.session.ChannelName(c.guild, channel.ID)
+		if err != nil {
+			return err
+		}
 	}
+
+	if err := c.client.Join(channelName, channel.Topic,
+		channel.ID.Time()); err != nil {
+		return err
+	}
+
+	backlog, err := c.session.Messages(channel.ID)
+	if err != nil {
+		return err
+	}
+
+	for i := len(backlog) - 1; i >= 0; i-- {
+		if err := c.sendDiscordMessage(&backlog[i], false); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 var actionRegex = regexp.MustCompile(`^\x01ACTION (.*)\x01$`)
 
-func (c *Client) handleIRCPrivmsg(msg *irc.Message) error {
-	if len(msg.Params) < 2 {
-		return fmt.Errorf("not enough parameters for PRIVMSG")
-	}
-	text := msg.Params[1]
-	if strings.HasPrefix(text, "s/") {
-		return c.handleIRCRegexEdit(msg)
-	}
-	text = actionRegex.ReplaceAllString(text, "*$1*")
-	text = c.replaceIRCMentions(text)
+func (c *Client) HandleMessage(channel, content string) error {
+
 	var channelID discord.Snowflake
-	if c.guild.Valid() {
-		if !strings.HasPrefix(msg.Params[0], "#") {
-			return fmt.Errorf("invalid channel name")
-		}
-		channelID = c.session.ChannelFromName(c.guild, strings.TrimPrefix(msg.Params[0], "#"))
+	if c.isGuild() {
+		channelID = c.session.ChannelFromName(c.guild, channel)
 	} else {
-		user := c.session.UserFromName(msg.Params[0])
+		user := c.session.UserFromName(channel)
 		if !user.Valid() {
-			return fmt.Errorf("no user: %s", msg.Params[0])
+			return fmt.Errorf("no user named %s", channel)
 		}
+
 		channel, err := c.session.CreatePrivateChannel(user)
 		if err != nil {
 			return err
 		}
+
 		channelID = channel.ID
 	}
-	if !channelID.Valid() {
-		return fmt.Errorf("Invalid channel")
+
+	if strings.HasPrefix(content, "s/") {
+		return c.handleRegexEdit(channel, channelID, content)
 	}
 
-	dmsg, err := c.session.SendMessage(channelID, text, nil)
+	content = actionRegex.ReplaceAllString(content, "*$1*")
+	content = c.replaceIRCMentions(content)
+
+	msg, err := c.session.SendMessage(channelID, content, nil)
 	if err != nil {
 		return err
 	}
-	c.lastMessageID = dmsg.ID
+	c.lastMessageID = msg.ID
 
 	return nil
 }
 
 var editRegex = regexp.MustCompile(`^s/((?:\\/|[^/])*)/((?:\\/|[^/])*)(?:/(g?))?$`)
 
-func (c *Client) handleIRCRegexEdit(msg *irc.Message) error {
+func (c *Client) handleRegexEdit(channelName string,
+	channelID discord.Snowflake, content string) error {
 	bail := func(format string, args ...interface{}) error {
-		return replies.NOTICE(
-			c, c.serverPrefix, msg.Params[0], fmt.Sprintf(format, args...))
+		return nil
+		/*
+			return replies.NOTICE(
+				c, c.ServerPrefix(), channelName,
+				fmt.Sprintf(format, args...))
+		*/
 	}
 
-	matches := editRegex.FindStringSubmatch(msg.Params[1])
+	matches := editRegex.FindStringSubmatch(content)
 	if matches == nil {
 		return bail("invalid replacement")
 	}
 
-	regex, err := regexp.Compile(matches[1])
+	regex, err := regexp.Compile(content)
 	if err != nil {
 		return bail("failed to compile regex: %v", err)
 	}
 
-	channel := c.session.ChannelFromName(c.guild, strings.TrimPrefix(msg.Params[0], "#"))
+	channel := c.session.ChannelFromName(c.guild,
+		strings.TrimPrefix(channelName, "#"))
 	if !channel.Valid() {
-		return fmt.Errorf("failed to find channel #%s", msg.Params[0])
+		return fmt.Errorf("failed to find channel #%s", channelName)
 	}
 
 	backlog, err := c.session.Messages(channel)
@@ -220,116 +245,86 @@ func (c *Client) handleIRCRegexEdit(msg *irc.Message) error {
 	}
 
 	beforeEdit := message.Content
+	fmt.Println(message)
 
 	var result string
 
 	if matches[3] == "g" {
-		fmt.Printf("%s,%s,%s", regex, beforeEdit, matches)
 		result = regex.ReplaceAllString(beforeEdit, matches[2])
+		if result == beforeEdit {
+			return bail("no matches")
+		}
+
 	} else {
 		match := regex.FindStringSubmatchIndex(beforeEdit)
 		if match == nil {
 			return bail("no matches")
 		}
+
 		dst := []byte{}
-		replaced := regex.ExpandString(dst, matches[2], beforeEdit, match)
-		result = beforeEdit[:match[0]] + string(replaced) + beforeEdit[match[1]:]
+		replaced := regex.ExpandString(
+			dst, matches[2], beforeEdit, match)
+
+		result = beforeEdit[:match[0]] +
+			string(replaced) + beforeEdit[match[1]:]
 	}
 
 	_, err = c.session.EditMessage(message.ChannelID, message.ID, string(result), nil, false)
+
 	return err
 }
 
-var pingRegex = regexp.MustCompile(`@[^ ]*`)
-
-func (c *Client) replaceIRCMentions(s string) string {
-	return pingRegex.ReplaceAllStringFunc(s, func(match string) string {
-		if match == "@" {
-			return match
-		}
-		id := c.session.UserFromName(match[1:])
-		if !id.Valid() {
-			return match
-		}
-		return fmt.Sprintf("<@%d>", id)
-	})
-}
-
-func (c *Client) handleIRCList(msg *irc.Message) error {
-	if !c.guild.Valid() {
-		return c.handleIRCListDM(msg)
-	}
-
-	channels, err := c.session.Channels(c.guild)
-	if err != nil {
-		return err
-	}
-
-	if err := replies.RPL_LISTSTART(c); err != nil {
-		return err
-	}
-
-	for _, channel := range channels {
-		if visible, err := c.channelIsVisible(&channel); err != nil {
-			return err
-		} else if !visible {
-			continue
-		}
-
-		name, err := c.session.ChannelName(c.guild, channel.ID)
+func (c *Client) HandleList() ([]server.ListEntry, error) {
+	entries := []server.ListEntry{}
+	if c.isGuild() {
+		channels, err := c.session.Channels(c.guild)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		for _, channel := range channels {
+			if visible, err := c.channelIsVisible(
+				&channel); err != nil {
+				return nil, err
+			} else if !visible {
+				continue
+			}
 
-		topic := strings.ReplaceAll(render.Content(c.session, []byte(channel.Topic), nil), "\n", " ")
+			var entry server.ListEntry
+			var err error
+			entry.Channel, err = c.session.ChannelName(
+				c.guild, channel.ID)
+			if err != nil {
+				return nil, err
+			}
 
-		if err := replies.RPL_LIST(c, name, channel.Position, topic); err != nil {
-			return err
+			topic := render.Content(c.session,
+				[]byte(channel.Topic), nil)
+			entry.Topic = strings.ReplaceAll(topic, "\n", " ")
+
+			entries = append(entries, entry)
 		}
-
-	}
-
-	if err := replies.RPL_LISTEND(c); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (c *Client) handleIRCListDM(msg *irc.Message) error {
-	channels, err := c.session.PrivateChannels()
-	if err != nil {
-		return err
-	}
-
-	if err := replies.RPL_LISTSTART(c); err != nil {
-		return err
-	}
-
-	for _, channel := range channels {
-		if channel.Type != discord.DirectMessage {
-			continue
-		}
-
-		recip := channel.DMRecipients[0]
-
-		name := c.session.UserName(recip.ID, recip.Username)
+	} else {
+		channels, err := c.session.PrivateChannels()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		topic := fmt.Sprintf("Direct message with %s#%s",
-			recip.Username, recip.Discriminator)
+		for _, channel := range channels {
+			if channel.Type != discord.DirectMessage {
+				continue
+			}
 
-		if err := replies.RPL_LIST(c, name, channel.Position,
-			topic); err != nil {
-			return err
+			var entry server.ListEntry
+
+			recip := channel.DMRecipients[0]
+
+			entry.Channel = c.session.UserName(
+				recip.ID, recip.Username)
+			entry.Topic = fmt.Sprintf("Direct message with %s#%s",
+				recip.Username, recip.Discriminator)
+
+			entries = append(entries, entry)
 		}
 	}
-
-	if err := replies.RPL_LISTEND(c); err != nil {
-		return err
-	}
-
-	return nil
+	return entries, nil
 }

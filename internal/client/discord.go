@@ -1,12 +1,9 @@
 package client
 
 import (
-	"strings"
-
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
 	"github.com/tadeokondrak/ircdiscord/internal/render"
-	"github.com/tadeokondrak/ircdiscord/internal/replies"
 	"gopkg.in/irc.v3"
 )
 
@@ -18,10 +15,11 @@ func (c *Client) discordUserPrefix(u *discord.User) *irc.Prefix {
 	}
 }
 
-func (c *Client) sendDiscordMessage(m *discord.Message) error {
+func (c *Client) sendDiscordMessage(m *discord.Message, autojoin bool) error {
 	// TODO: arikawa should store relationships in its state
 	for _, rel := range c.session.Ready.Relationships {
-		if rel.User.ID == m.Author.ID && rel.Type == gateway.BlockedRelationship {
+		if rel.User.ID == m.Author.ID &&
+			rel.Type == gateway.BlockedRelationship {
 			return nil
 		}
 	}
@@ -44,22 +42,17 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 		channelName = c.session.UserName(recip.ID, recip.Username)
 	}
 
-	if !c.guild.Valid() {
-		c.sendJoin(channel)
+	if autojoin && !c.guild.Valid() && !c.client.InChannel(channelName) {
+		return c.HandleJoin(channelName)
 	}
 
 	message, err := render.Message(c.session, m)
 	if err != nil {
 		return err
 	}
-	for _, line := range strings.Split(message, "\n") {
-		if err := replies.PRIVMSG(
-			c, m.ID.Time(), c.discordUserPrefix(&m.Author), channelName, line,
-		); err != nil {
-			return err
-		}
-	}
-	return nil
+
+	return c.client.Message(channelName, message,
+		c.discordUserPrefix(&m.Author), m.ID.Time())
 }
 
 func (c *Client) handleDiscordEvent(e gateway.Event) error {
@@ -131,8 +124,10 @@ func (c *Client) handleDiscordMessage(m *discord.Message) error {
 			return nil
 		}
 	}
-	if m.ID == c.lastMessageID && !c.HasCapability("echo-message") {
+
+	if m.ID == c.lastMessageID && !c.client.HasCapability("echo-message") {
 		return nil
 	}
-	return c.sendDiscordMessage(m)
+
+	return c.sendDiscordMessage(m, true)
 }

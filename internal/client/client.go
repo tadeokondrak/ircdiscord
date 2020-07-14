@@ -1,41 +1,41 @@
 package client
 
 import (
-	"fmt"
 	"log"
 	"net"
-	"strings"
+	"time"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
-	"github.com/tadeokondrak/ircdiscord/internal/replies"
+	"github.com/tadeokondrak/ircdiscord/internal/server"
 	"github.com/tadeokondrak/ircdiscord/internal/session"
 	"gopkg.in/irc.v3"
 )
 
 type Client struct {
-	netconn        net.Conn
-	ircconn        *irc.Conn
-	session        *session.Session  // nil pre-login
-	guild          discord.Snowflake // invalid for DM server and pre-login
-	serverPrefix   *irc.Prefix
-	clientPrefix   *irc.Prefix
-	joinedChannels map[string]bool
-	lastMessageID  discord.Snowflake // used to prevent duplicate messages
-	capabilities   map[string]bool   // ircv3 capabilities
-	IRCDebug       bool              // whether to log IRC interaction
-	DiscordDebug   bool              // whether to log Discord interaction
+	netconn       net.Conn
+	ircconn       *irc.Conn
+	client        *server.Client
+	session       *session.Session  // nil pre-login
+	guild         discord.Snowflake // invalid for DM server and pre-login
+	lastMessageID discord.Snowflake // used to prevent duplicate messages
+	capabilities  map[string]bool   // ircv3 capabilities
+	IRCDebug      bool              // whether to log IRC interaction
+	DiscordDebug  bool              // whether to log Discord interaction
 }
 
 func New(conn net.Conn) *Client {
+	ircconn := irc.NewConn(conn)
+	client := server.NewClient(ircconn,
+		conn.LocalAddr().String(), conn.RemoteAddr().String())
+
 	c := &Client{
-		netconn:        conn,
-		ircconn:        irc.NewConn(conn),
-		serverPrefix:   &irc.Prefix{Name: conn.LocalAddr().String()},
-		clientPrefix:   &irc.Prefix{Name: conn.RemoteAddr().String()},
-		joinedChannels: make(map[string]bool),
-		capabilities:   make(map[string]bool),
+		netconn:      conn,
+		ircconn:      ircconn,
+		client:       client,
+		capabilities: make(map[string]bool),
 	}
+
+	c.client.Server = c
 
 	c.ircconn.Reader.DebugCallback = func(line string) {
 		if c.IRCDebug {
@@ -60,16 +60,17 @@ func (c *Client) Close() error {
 	return c.netconn.Close()
 }
 
+/*
 func (c *Client) HasCapability(capability string) bool {
-	return c.capabilities[capability]
+	return c.client.HasCapability(capability)
 }
 
 func (c *Client) ClientPrefix() *irc.Prefix {
-	return c.clientPrefix
+	return c.client.ClientPrefix()
 }
 
 func (c *Client) ServerPrefix() *irc.Prefix {
-	return c.serverPrefix
+	return c.client.ServerPrefix()
 }
 
 func (c *Client) ReadMessage() (*irc.Message, error) {
@@ -79,131 +80,24 @@ func (c *Client) ReadMessage() (*irc.Message, error) {
 func (c *Client) WriteMessage(m *irc.Message) error {
 	return c.ircconn.WriteMessage(m)
 }
+*/
 
-var supportedCaps = []string{
-	"echo-message",
-	"server-time",
-	"message-tags",
-}
-
-type registrationState struct {
-	pass      bool
-	nick      bool
-	user      bool
-	isBlocked bool
-}
-
-func (s registrationState) Ready() bool {
-	return s.pass && s.nick && s.user && !s.isBlocked
+func (c *Client) isGuild() bool {
+	return c.guild.Valid()
 }
 
 func (c *Client) Run() error {
 	defer c.Close()
 
-	log.Printf("connected: %v", c.clientPrefix.Name)
-	defer log.Printf("disconnected: %v", c.clientPrefix.Name)
-
-	regState := registrationState{}
-
-	for !regState.Ready() {
-		msg, err := c.ReadMessage()
-		if err != nil {
-			return err
-		}
-		switch msg.Command {
-		case "NICK":
-			regState.nick = true
-		case "USER":
-			regState.user = true
-		case "CAP":
-			if len(msg.Params) < 1 {
-				return fmt.Errorf(
-					"invalid parameter count for CAP")
-			}
-			switch msg.Params[0] {
-			case "LS":
-				if err := replies.CAP_LS(c, supportedCaps); err != nil {
-					return err
-				}
-				regState.isBlocked = true
-			case "REQ":
-				if len(msg.Params) != 2 {
-					return fmt.Errorf("invalid parameter count for CAP REQ")
-				}
-				requested := strings.Split(msg.Params[1], " ")
-				for _, capability := range requested {
-					supported := false
-					for _, supportedCap := range supportedCaps {
-						if supportedCap == capability {
-							supported = true
-							break
-						}
-					}
-					if !supported {
-						return fmt.Errorf("invalid capability requested: %s", capability)
-					}
-					c.capabilities[capability] = true
-				}
-				if err := replies.CAP_ACK(c, requested); err != nil {
-					return err
-				}
-				regState.isBlocked = true
-			case "END":
-				regState.isBlocked = false
-			}
-		case "PASS":
-			if len(msg.Params) != 1 {
-				return fmt.Errorf("invalid parameter count for PASS")
-			}
-			args := strings.SplitN(msg.Params[0], ":", 2)
-			session, err := session.Get(args[0], c.DiscordDebug)
-			if err != nil {
-				return err
-			}
-			c.session = session
-			if len(args) > 1 {
-				snowflake, err := discord.ParseSnowflake(args[1])
-				if err != nil {
-					return err
-				}
-				guild, err := c.session.Guild(snowflake)
-				if err != nil {
-					return err
-				}
-				c.session.Gateway.GuildSubscribe(gateway.GuildSubscribeData{
-					GuildID: guild.ID,
-				})
-				c.guild = guild.ID
-			}
-			regState.pass = true
-		default:
-			return fmt.Errorf(
-				"invalid command received in authentication stage: %v",
-				msg.Command)
-		}
-	}
-
-	me, err := c.session.Me()
-	if err != nil {
-		return err
-	}
-
-	if err := c.seedState(); err != nil {
-		return err
-	}
-
-	c.clientPrefix = c.discordUserPrefix(me)
-
-	if err := c.sendGreeting(); err != nil {
-		return err
-	}
+	log.Printf("connected: %v", c.client.ClientPrefix().Name)
+	defer log.Printf("disconnected: %v", c.client.ClientPrefix().Name)
 
 	msgs := make(chan *irc.Message)
 	errors := make(chan error)
 
 	go func() {
 		for {
-			msg, err := c.ReadMessage()
+			msg, err := c.client.ReadMessage()
 			if err != nil {
 				errors <- err
 				return
@@ -212,13 +106,29 @@ func (c *Client) Run() error {
 		}
 	}()
 
-	events, cancel := c.session.ChanFor(func(e interface{}) bool { return true })
+	for !c.client.IsRegistered() {
+		select {
+		case msg := <-msgs:
+			if err := c.client.HandleMessage(msg); err != nil {
+				return err
+			}
+		case err := <-errors:
+			return err
+		}
+	}
+
+	trueFunc := func(e interface{}) bool { return true }
+	events, cancel := c.session.ChanFor(trueFunc)
 	defer cancel()
+
+	if err := c.seedState(); err != nil {
+		return err
+	}
 
 	for {
 		select {
 		case msg := <-msgs:
-			if err := c.handleIRCMessage(msg); err != nil {
+			if err := c.client.HandleMessage(msg); err != nil {
 				return err
 			}
 		case event := <-events:
@@ -249,59 +159,76 @@ func (c *Client) channelIsVisible(channel *discord.Channel) (bool, error) {
 	return perms.Has(discord.PermissionViewChannel), nil
 }
 
-func (c *Client) sendGreeting() error {
-	me, err := c.session.Me()
-	if err != nil {
-		return err
-	}
-
-	guildName := "Discord"
-	guildID := me.ID
-	if c.guild.Valid() {
-		guild, err := c.session.Guild(c.guild)
+func (c *Client) seedState() error {
+	if c.isGuild() {
+		channels, err := c.session.Channels(c.guild)
 		if err != nil {
 			return err
 		}
-		guildName = guild.Name
-		guildID = c.guild
-	}
 
-	if err := replies.RPL_WELCOME(c, guildName); err != nil {
-		return err
-	}
+		for _, channel := range channels {
+			if channel.Type != discord.GuildText {
+				continue
+			}
+			_, err := c.session.ChannelName(c.guild, channel.ID)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		channels, err := c.session.PrivateChannels()
+		if err != nil {
+			return err
+		}
 
-	if err := replies.RPL_YOURHOST(c); err != nil {
-		return err
-	}
-
-	if err := replies.RPL_CREATED(c, guildID.Time()); err != nil {
-		return err
-	}
-
-	if err := replies.ERR_NOMOTD(c); err != nil {
-		return err
+		for _, channel := range channels {
+			if channel.Type != discord.DirectMessage {
+				continue
+			}
+			recip := channel.DMRecipients[0]
+			c.session.UserName(recip.ID, recip.Username)
+		}
 	}
 
 	return nil
 }
 
-func (c *Client) seedState() error {
-	if c.guild.Valid() {
-		return nil
-	}
+func (c *Client) NetworkName() (string, error) {
+	guildName := "Discord"
 
-	channels, err := c.session.PrivateChannels()
-	if err != nil {
-		return err
-	}
-
-	for _, channel := range channels {
-		if channel.Type != discord.DirectMessage {
-			continue
+	if c.isGuild() {
+		guild, err := c.session.Guild(c.guild)
+		if err != nil {
+			return "", err
 		}
-		recip := channel.DMRecipients[0]
-		c.session.UserName(recip.ID, recip.Username)
+		guildName = guild.Name
 	}
 
-	return nil
+	return guildName, nil
+}
+
+func (c *Client) ServerName() (string, error) {
+	return "ircdiscord", nil
+}
+
+func (c *Client) ServerVersion() (string, error) {
+	return "git", nil
+}
+
+func (c *Client) ServerCreated() (time.Time, error) {
+	me, err := c.session.Me()
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	guildID := me.ID
+	if c.isGuild() {
+		guildID = c.guild
+	}
+
+	return guildID.Time(), nil
+}
+
+func (c *Client) MOTD() ([]string, error) {
+	return []string{}, nil
 }

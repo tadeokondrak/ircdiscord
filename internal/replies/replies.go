@@ -25,6 +25,15 @@ func CAP_LS(w Writer, supported []string) error {
 	})
 }
 
+func CAP_LIST(w Writer, enabled []string) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: "CAP",
+		Params: []string{w.ClientPrefix().Name, "LIST",
+			strings.Join(enabled, " ")},
+	})
+}
+
 func CAP_ACK(w Writer, acked []string) error {
 	return w.WriteMessage(&irc.Message{
 		Prefix:  w.ServerPrefix(),
@@ -34,11 +43,19 @@ func CAP_ACK(w Writer, acked []string) error {
 	})
 }
 
-func JOIN(w Writer, channels []string) error {
+func NICK(w Writer, prefix *irc.Prefix, name string) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  prefix,
+		Command: "NICK",
+		Params:  []string{name},
+	})
+}
+
+func JOIN(w Writer, channel string) error {
 	return w.WriteMessage(&irc.Message{
 		Prefix:  w.ClientPrefix(),
 		Command: "JOIN",
-		Params:  []string{strings.Join(channels, ",")},
+		Params:  []string{channel},
 	})
 }
 
@@ -82,13 +99,13 @@ func RPL_WELCOME(w Writer, towhat string) error {
 	})
 }
 
-func RPL_YOURHOST(w Writer) error {
+func RPL_YOURHOST(w Writer, serverName, serverVersion string) error {
 	return w.WriteMessage(&irc.Message{
 		Prefix:  w.ServerPrefix(),
 		Command: irc.RPL_YOURHOST,
 		Params: []string{w.ClientPrefix().Name, fmt.Sprintf(
-			"Your host is %s, running ircdiscord",
-			w.ServerPrefix().Name)},
+			"Your host is %s, running version %s",
+			serverName, serverVersion)},
 	})
 }
 
@@ -106,6 +123,15 @@ func RPL_TOPIC(w Writer, channel, topic string) error {
 		Prefix:  w.ServerPrefix(),
 		Command: irc.RPL_TOPIC,
 		Params:  []string{w.ClientPrefix().Name, channel, topic},
+	})
+}
+
+func RPL_NOTOPIC(w Writer, channel string) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_TOPIC,
+		Params: []string{w.ClientPrefix().Name, channel,
+			"No topic is set"},
 	})
 }
 
@@ -140,6 +166,31 @@ func RPL_LISTEND(w Writer) error {
 		Prefix:  w.ServerPrefix(),
 		Command: irc.RPL_LISTEND,
 		Params:  []string{w.ClientPrefix().Name, "End of /LIST"},
+	})
+}
+
+func RPL_MOTDSTART(w Writer, serverName string) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_MOTDSTART,
+		Params: []string{w.ClientPrefix().Name,
+			fmt.Sprintf("- %s Message of the day - ", serverName)},
+	})
+}
+
+func RPL_MOTD(w Writer, line string) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_MOTD,
+		Params:  []string{w.ClientPrefix().Name, line},
+	})
+}
+
+func RPL_ENDOFMOTD(w Writer) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_ENDOFMOTD,
+		Params:  []string{w.ClientPrefix().Name, "End of /MOTD command."},
 	})
 }
 

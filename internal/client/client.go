@@ -14,42 +14,41 @@ import (
 )
 
 type Client struct {
-	ircconn        *irc.Conn
 	netconn        net.Conn
-	session        *session.Session
-	guild          discord.Snowflake
+	ircconn        *irc.Conn
+	session        *session.Session  // nil pre-login
+	guild          discord.Snowflake // invalid for DM server and pre-login
 	serverPrefix   *irc.Prefix
 	clientPrefix   *irc.Prefix
 	joinedChannels map[string]bool
-	// the ID of the last message sent by this client
-	// this is used to prevent duplicate messages for clients who don't support
-	// ircv3 echo-message
-	lastMessageID discord.Snowflake
-	// ircv3 capabilities
-	caps         map[string]bool
-	IRCDebug     bool
-	DiscordDebug bool
+	lastMessageID  discord.Snowflake // used to prevent duplicate messages
+	capabilities   map[string]bool   // ircv3 capabilities
+	IRCDebug       bool              // whether to log IRC interaction
+	DiscordDebug   bool              // whether to log Discord interaction
 }
 
 func New(conn net.Conn) *Client {
 	c := &Client{
-		ircconn:        irc.NewConn(conn),
 		netconn:        conn,
+		ircconn:        irc.NewConn(conn),
 		serverPrefix:   &irc.Prefix{Name: conn.LocalAddr().String()},
 		clientPrefix:   &irc.Prefix{Name: conn.RemoteAddr().String()},
 		joinedChannels: make(map[string]bool),
-		caps:           make(map[string]bool),
+		capabilities:   make(map[string]bool),
 	}
+
 	c.ircconn.Reader.DebugCallback = func(line string) {
 		if c.IRCDebug {
 			log.Printf("<-i %s", line)
 		}
 	}
+
 	c.ircconn.Writer.DebugCallback = func(line string) {
 		if c.IRCDebug {
 			log.Printf("->i %s", line)
 		}
 	}
+
 	return c
 }
 
@@ -61,7 +60,7 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) HasCapability(capability string) bool {
-	return c.caps[capability]
+	return c.capabilities[capability]
 }
 
 func (c *Client) ClientPrefix() *irc.Prefix {
@@ -129,7 +128,7 @@ func (c *Client) Run() error {
 					if !supported {
 						return fmt.Errorf("invalid capability requested: %s", capability)
 					}
-					c.caps[capability] = true
+					c.capabilities[capability] = true
 				}
 				if err := replies.CAP_ACK(c, requested); err != nil {
 					return err

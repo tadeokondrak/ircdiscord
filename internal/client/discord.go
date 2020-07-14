@@ -131,7 +131,7 @@ func (c *Client) handleDiscordMessage(m *discord.Message) error {
 			return nil
 		}
 	}
-	if m.ID == c.lastMessageID && !c.caps["echo-message"] {
+	if m.ID == c.lastMessageID && !c.HasCapability("echo-message") {
 		return nil
 	}
 	return c.sendDiscordMessage(m)

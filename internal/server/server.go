@@ -153,10 +153,21 @@ type Server interface {
 	HandleJoin(channel string) error
 	HandleMessage(channel, content string) error
 	HandleList() ([]ListEntry, error)
+	HandleWhois(user string) (WhoisReply, error)
 }
 
 type ListEntry struct {
 	Channel string
 	Users   int
 	Topic   string
+}
+
+type WhoisReply struct {
+	Prefix     *irc.Prefix
+	Realname   string
+	Server     string
+	ServerInfo string
+	IsOperator bool
+	LastActive time.Time
+	Channels   []string
 }

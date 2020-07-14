@@ -229,3 +229,52 @@ func (c *Client) handleList(msg *irc.Message) error {
 
 	return nil
 }
+
+func (c *Client) handleWhois(msg *irc.Message) error {
+	if err := checkParamCount(msg, 1, 1); err != nil {
+		return err
+	}
+
+	info, err := c.Server.HandleWhois(msg.Params[0])
+	if err != nil {
+		return err
+	}
+
+	if err := replies.RPL_WHOISUSER(
+		c, info.Prefix, info.Realname); err != nil {
+		return err
+	}
+
+	if info.Server != "" || info.ServerInfo != "" {
+		if err := replies.RPL_WHOISSERVER(
+			c, info.Prefix.Name,
+			info.Server, info.ServerInfo); err != nil {
+			return err
+		}
+	}
+
+	if info.IsOperator {
+		if err := replies.RPL_WHOISOPERATOR(c,
+			info.Prefix.Name); err != nil {
+			return err
+		}
+	}
+
+	if !info.LastActive.IsZero() {
+		if err := replies.RPL_WHOISIDLE(c,
+			info.Prefix.Name, info.LastActive); err != nil {
+			return err
+		}
+	}
+
+	if err := replies.RPL_WHOISCHANNELS(c,
+		info.Prefix.Name, info.Channels); err != nil {
+		return err
+	}
+
+	if err := replies.RPL_ENDOFWHOIS(c, info.Prefix.Name); err != nil {
+		return err
+	}
+
+	return nil
+}

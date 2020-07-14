@@ -201,3 +201,57 @@ func ERR_NOMOTD(w Writer) error {
 		Params:  []string{w.ClientPrefix().Name, "No MOTD"},
 	})
 }
+
+func RPL_WHOISUSER(w Writer, prefix *irc.Prefix, realname string) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_WHOISUSER,
+		Params: []string{w.ClientPrefix().Name, prefix.Name,
+			prefix.User, prefix.Host, "*", realname},
+	})
+}
+
+func RPL_WHOISSERVER(w Writer, user, server, serverInfo string) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_WHOISSERVER,
+		Params: []string{w.ClientPrefix().Name, user,
+			server, serverInfo},
+	})
+}
+
+func RPL_WHOISOPERATOR(w Writer, user string) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_WHOISOPERATOR,
+		Params: []string{w.ClientPrefix().Name,
+			user, "is an IRC operator"},
+	})
+}
+
+func RPL_WHOISIDLE(w Writer, user string, lastActive time.Time) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_WHOISCHANNELS,
+		Params: []string{w.ClientPrefix().Name, user,
+			fmt.Sprint(int(lastActive.Sub(time.Now()).Seconds()))},
+	})
+}
+
+func RPL_WHOISCHANNELS(w Writer, user string, channels []string) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_WHOISCHANNELS,
+		Params: []string{w.ClientPrefix().Name,
+			user, strings.Join(channels, " ")},
+	})
+}
+
+func RPL_ENDOFWHOIS(w Writer, user string) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_ENDOFWHOIS,
+		Params: []string{w.ClientPrefix().Name,
+			user, "End of /WHOIS list"},
+	})
+}

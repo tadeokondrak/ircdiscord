@@ -60,28 +60,6 @@ func (c *Client) Close() error {
 	return c.netconn.Close()
 }
 
-/*
-func (c *Client) HasCapability(capability string) bool {
-	return c.client.HasCapability(capability)
-}
-
-func (c *Client) ClientPrefix() *irc.Prefix {
-	return c.client.ClientPrefix()
-}
-
-func (c *Client) ServerPrefix() *irc.Prefix {
-	return c.client.ServerPrefix()
-}
-
-func (c *Client) ReadMessage() (*irc.Message, error) {
-	return c.ircconn.ReadMessage()
-}
-
-func (c *Client) WriteMessage(m *irc.Message) error {
-	return c.ircconn.WriteMessage(m)
-}
-*/
-
 func (c *Client) isGuild() bool {
 	return c.guild.Valid()
 }

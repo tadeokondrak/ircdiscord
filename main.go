@@ -21,6 +21,7 @@ var (
 
 func runClient(conn net.Conn) {
 	c := client.New(conn, ircDebug, discordDebug)
+	defer c.Close()
 	if err := c.Run(); err != nil {
 		log.Println(err)
 	}

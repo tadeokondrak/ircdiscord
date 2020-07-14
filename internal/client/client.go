@@ -62,8 +62,6 @@ func (c *Client) isGuild() bool {
 }
 
 func (c *Client) Run() error {
-	defer c.Close()
-
 	log.Printf("connected: %v", c.client.ClientPrefix().Name)
 	defer log.Printf("disconnected: %v", c.client.ClientPrefix().Name)
 

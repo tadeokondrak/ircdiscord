@@ -56,6 +56,7 @@ func (c *Client) Close() error {
 	if c.session != nil {
 		c.session.Unref()
 	}
+
 	return c.netconn.Close()
 }
 
@@ -85,33 +86,46 @@ var supportedCaps = []string{
 	"message-tags",
 }
 
+type registrationState struct {
+	pass      bool
+	nick      bool
+	user      bool
+	isBlocked bool
+}
+
+func (s registrationState) Ready() bool {
+	return s.pass && s.nick && s.user && !s.isBlocked
+}
+
 func (c *Client) Run() error {
 	defer c.Close()
 
 	log.Printf("connected: %v", c.clientPrefix.Name)
 	defer log.Printf("disconnected: %v", c.clientPrefix.Name)
 
-	passed, nicked, usered, blocked := false, false, false, false
-	for !passed || !nicked || !usered || blocked {
+	regState := registrationState{}
+
+	for !regState.Ready() {
 		msg, err := c.ReadMessage()
 		if err != nil {
 			return err
 		}
 		switch msg.Command {
 		case "NICK":
-			nicked = true
+			regState.nick = true
 		case "USER":
-			usered = true
+			regState.user = true
 		case "CAP":
 			if len(msg.Params) < 1 {
-				return fmt.Errorf("invalid parameter count for CAP")
+				return fmt.Errorf(
+					"invalid parameter count for CAP")
 			}
 			switch msg.Params[0] {
 			case "LS":
 				if err := replies.CAP_LS(c, supportedCaps); err != nil {
 					return err
 				}
-				blocked = true
+				regState.isBlocked = true
 			case "REQ":
 				if len(msg.Params) != 2 {
 					return fmt.Errorf("invalid parameter count for CAP REQ")
@@ -133,9 +147,9 @@ func (c *Client) Run() error {
 				if err := replies.CAP_ACK(c, requested); err != nil {
 					return err
 				}
-				blocked = true
+				regState.isBlocked = true
 			case "END":
-				blocked = false
+				regState.isBlocked = false
 			}
 		case "PASS":
 			if len(msg.Params) != 1 {
@@ -161,9 +175,10 @@ func (c *Client) Run() error {
 				})
 				c.guild = guild.ID
 			}
-			passed = true
+			regState.pass = true
 		default:
-			return fmt.Errorf("invalid command received in authentication stage: %v",
+			return fmt.Errorf(
+				"invalid command received in authentication stage: %v",
 				msg.Command)
 		}
 	}

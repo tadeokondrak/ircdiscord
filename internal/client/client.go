@@ -15,7 +15,7 @@ import (
 
 type Client struct {
 	*irc.Conn
-	net            net.Conn
+	netconn        net.Conn
 	session        *session.Session
 	guild          discord.Snowflake
 	serverPrefix   *irc.Prefix
@@ -34,7 +34,7 @@ type Client struct {
 func New(conn net.Conn) *Client {
 	c := &Client{
 		Conn:           irc.NewConn(conn),
-		net:            conn,
+		netconn:        conn,
 		serverPrefix:   &irc.Prefix{Name: conn.LocalAddr().String()},
 		clientPrefix:   &irc.Prefix{Name: conn.RemoteAddr().String()},
 		joinedChannels: make(map[string]bool),
@@ -57,7 +57,7 @@ func (c *Client) Close() error {
 	if c.session != nil {
 		c.session.Unref()
 	}
-	return c.net.Close()
+	return c.netconn.Close()
 }
 
 func (c *Client) HasCapability(capability string) bool {

@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"time"
@@ -207,24 +206,4 @@ func (c *Client) ServerCreated() (time.Time, error) {
 
 func (c *Client) MOTD() ([]string, error) {
 	return []string{}, nil
-}
-
-func (c *Client) HandleWhois(username string) (server.WhoisReply, error) {
-	var reply server.WhoisReply
-
-	userID := c.session.UserFromName(c.guild, username)
-	if !userID.Valid() {
-		return server.WhoisReply{},
-			fmt.Errorf("no user named %s found", username)
-	}
-
-	user, err := c.session.User(userID)
-	if err != nil {
-		return server.WhoisReply{}, err
-	}
-
-	reply.Prefix = c.discordUserPrefix(user)
-	reply.Realname = user.Username
-
-	return reply, nil
 }

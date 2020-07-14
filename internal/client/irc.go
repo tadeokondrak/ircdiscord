@@ -1,7 +1,6 @@
 package client
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -13,14 +12,23 @@ import (
 )
 
 func (c *Client) sendJoin(channel *discord.Channel) error {
-	if !c.guild.Valid() {
-		return errors.New("JOIN for non-guilds is currently unsupported")
+	var name string
+
+	if c.guild.Valid() {
+		var err error
+		name, err = c.session.ChannelName(channel.GuildID, channel.ID)
+		if err != nil {
+			return err
+		}
+	} else if channel.Type == discord.DirectMessage {
+		recip := channel.DMRecipients[0]
+		name = c.session.UserName(recip.ID, recip.Username)
 	}
 
-	name, err := c.session.ChannelName(c.guild, channel.ID)
-	if err != nil {
-		return err
+	if c.joinedChannels[name] {
+		return nil
 	}
+	c.joinedChannels[name] = true
 
 	if err := replies.JOIN(c, []string{name}); err != nil {
 		return err
@@ -73,6 +81,9 @@ func (c *Client) handleIRCJoin(msg *irc.Message) error {
 	if len(msg.Params) != 1 {
 		return fmt.Errorf("invalid parameter count for JOIN")
 	}
+	if !c.guild.Valid() {
+		return c.handleIRCJoinDM(msg)
+	}
 	for _, name := range strings.Split(msg.Params[0], ",") {
 		if !strings.HasPrefix(name, "#") {
 			return fmt.Errorf("invalid channel name")
@@ -98,14 +109,29 @@ func (c *Client) handleIRCJoin(msg *irc.Message) error {
 	return nil
 }
 
+func (c *Client) handleIRCJoinDM(msg *irc.Message) error {
+	for _, name := range strings.Split(msg.Params[0], ",") {
+		user := c.session.UserFromName(name)
+		if !user.Valid() {
+			return fmt.Errorf("no user named %s found", name)
+		}
+		channel, err := c.session.CreatePrivateChannel(user)
+		if err != nil {
+			return err
+		}
+		if err := c.sendJoin(channel); err != nil {
+			return err
+		}
+		break
+	}
+	return nil
+}
+
 var actionRegex = regexp.MustCompile(`^\x01ACTION (.*)\x01$`)
 
 func (c *Client) handleIRCPrivmsg(msg *irc.Message) error {
 	if len(msg.Params) < 2 {
 		return fmt.Errorf("not enough parameters for PRIVMSG")
-	}
-	if !strings.HasPrefix(msg.Params[0], "#") {
-		return fmt.Errorf("invalid channel name")
 	}
 	text := msg.Params[1]
 	if strings.HasPrefix(text, "s/") {
@@ -113,11 +139,28 @@ func (c *Client) handleIRCPrivmsg(msg *irc.Message) error {
 	}
 	text = actionRegex.ReplaceAllString(text, "*$1*")
 	text = c.replaceIRCMentions(text)
-	channel := c.session.ChannelFromName(c.guild, strings.TrimPrefix(msg.Params[0], "#"))
-	if !channel.Valid() {
+	var channelID discord.Snowflake
+	if c.guild.Valid() {
+		if !strings.HasPrefix(msg.Params[0], "#") {
+			return fmt.Errorf("invalid channel name")
+		}
+		channelID = c.session.ChannelFromName(c.guild, strings.TrimPrefix(msg.Params[0], "#"))
+	} else {
+		user := c.session.UserFromName(msg.Params[0])
+		if !user.Valid() {
+			return fmt.Errorf("no user: %s", msg.Params[0])
+		}
+		channel, err := c.session.CreatePrivateChannel(user)
+		if err != nil {
+			return err
+		}
+		channelID = channel.ID
+	}
+	if !channelID.Valid() {
 		return fmt.Errorf("Invalid channel")
 	}
-	dmsg, err := c.session.SendMessage(channel, text, nil)
+
+	dmsg, err := c.session.SendMessage(channelID, text, nil)
 	if err != nil {
 		return err
 	}
@@ -214,7 +257,7 @@ func (c *Client) replaceIRCMentions(s string) string {
 
 func (c *Client) handleIRCList(msg *irc.Message) error {
 	if !c.guild.Valid() {
-		return fmt.Errorf("/LIST for non-guilds is unsupported")
+		return c.handleIRCListDM(msg)
 	}
 
 	channels, err := c.session.Channels(c.guild)
@@ -245,8 +288,48 @@ func (c *Client) handleIRCList(msg *irc.Message) error {
 		}
 
 	}
+
 	if err := replies.RPL_LISTEND(c); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (c *Client) handleIRCListDM(msg *irc.Message) error {
+	channels, err := c.session.PrivateChannels()
+	if err != nil {
+		return err
+	}
+
+	if err := replies.RPL_LISTSTART(c); err != nil {
+		return err
+	}
+
+	for _, channel := range channels {
+		if channel.Type != discord.DirectMessage {
+			continue
+		}
+
+		recip := channel.DMRecipients[0]
+
+		name := c.session.UserName(recip.ID, recip.Username)
+		if err != nil {
+			return err
+		}
+
+		topic := fmt.Sprintf("Direct message with %s#%s",
+			recip.Username, recip.Discriminator)
+
+		if err := replies.RPL_LIST(c, name, channel.Position,
+			topic); err != nil {
+			return err
+		}
+	}
+
+	if err := replies.RPL_LISTEND(c); err != nil {
+		return err
+	}
+
 	return nil
 }

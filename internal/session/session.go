@@ -117,12 +117,11 @@ func (s *Session) Close() error {
 }
 
 // UserName returns the IRC name for the given Discord user.
-func (s *Session) UserName(d *discord.User) string {
-	// TODO: this should just take an ID/Name pair, really
-	if !d.ID.Valid() {
-		return sanitizeNick(d.Username)
+func (s *Session) UserName(id discord.Snowflake, name string) string {
+	if !id.Valid() {
+		return sanitizeNick(name)
 	}
-	return s.nickMap.Insert(d.ID, sanitizeNick(d.Username))
+	return s.nickMap.Insert(id, sanitizeNick(name))
 }
 
 func (s *Session) UserFromName(name string) discord.Snowflake {

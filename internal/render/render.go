@@ -112,7 +112,7 @@ func Content(sess *session.Session, source []byte, m *discord.Message) string {
 				case n.Channel != nil:
 					fmt.Fprintf(&s, "\x02\x0302#%s\x03\x02", n.Channel.Name)
 				case n.GuildUser != nil:
-					fmt.Fprintf(&s, "\x02\x0302@%s\x03\x02", sess.UserName(&n.GuildUser.User))
+					fmt.Fprintf(&s, "\x02\x0302@%s\x03\x02", sess.UserName(n.GuildUser.User.ID, n.GuildUser.User.Username))
 				}
 			}
 		case *ast.String:

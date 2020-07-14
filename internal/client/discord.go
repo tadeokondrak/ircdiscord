@@ -12,8 +12,8 @@ import (
 
 func (c *Client) discordUserPrefix(u *discord.User) *irc.Prefix {
 	return &irc.Prefix{
-		User: c.session.UserName(u),
-		Name: c.session.UserName(u),
+		User: c.session.UserName(u.ID, u.Username),
+		Name: c.session.UserName(u.ID, u.Username),
 		Host: u.ID.String(),
 	}
 }
@@ -25,10 +25,27 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 			return nil
 		}
 	}
-	channelName, err := c.session.ChannelName(m.GuildID, m.ChannelID)
+
+	channel, err := c.session.Channel(m.ChannelID)
 	if err != nil {
 		return err
 	}
+
+	var channelName string
+
+	if c.guild.Valid() {
+		var err error
+		channelName, err = c.session.ChannelName(m.GuildID, m.ChannelID)
+		if err != nil {
+			return err
+		}
+	} else {
+		recip := channel.DMRecipients[0]
+		channelName = c.session.UserName(recip.ID, recip.Username)
+	}
+
+	c.sendJoin(channel)
+
 	message, err := render.Message(c.session, m)
 	if err != nil {
 		return err
@@ -99,11 +116,18 @@ func (c *Client) handleDiscordEvent(e gateway.Event) error {
 }
 
 func (c *Client) handleDiscordMessage(m *discord.Message) error {
-	if !c.guild.Valid() {
-		return nil
-	}
-	if m.GuildID != c.guild {
-		return nil
+	if c.guild.Valid() {
+		if m.GuildID != c.guild {
+			return nil
+		}
+	} else {
+		channel, err := c.session.Channel(m.ChannelID)
+		if err != nil {
+			return err
+		}
+		if channel.Type != discord.DirectMessage {
+			return nil
+		}
 	}
 	if m.ID == c.lastMessageID && !c.caps["echo-message"] {
 		return nil

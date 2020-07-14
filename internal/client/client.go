@@ -15,11 +15,12 @@ import (
 
 type Client struct {
 	*irc.Conn
-	net          net.Conn
-	session      *session.Session
-	guild        discord.Snowflake
-	serverPrefix *irc.Prefix
-	clientPrefix *irc.Prefix
+	net            net.Conn
+	session        *session.Session
+	guild          discord.Snowflake
+	serverPrefix   *irc.Prefix
+	clientPrefix   *irc.Prefix
+	joinedChannels map[string]bool
 	// the ID of the last message sent by this client
 	// this is used to prevent duplicate messages for clients who don't support
 	// ircv3 echo-message
@@ -32,11 +33,12 @@ type Client struct {
 
 func New(conn net.Conn) *Client {
 	c := &Client{
-		Conn:         irc.NewConn(conn),
-		net:          conn,
-		serverPrefix: &irc.Prefix{Name: conn.LocalAddr().String()},
-		clientPrefix: &irc.Prefix{Name: conn.RemoteAddr().String()},
-		caps:         make(map[string]bool),
+		Conn:           irc.NewConn(conn),
+		net:            conn,
+		serverPrefix:   &irc.Prefix{Name: conn.LocalAddr().String()},
+		clientPrefix:   &irc.Prefix{Name: conn.RemoteAddr().String()},
+		joinedChannels: make(map[string]bool),
+		caps:           make(map[string]bool),
 	}
 	c.Conn.Reader.DebugCallback = func(line string) {
 		if c.IRCDebug {
@@ -164,6 +166,10 @@ func (c *Client) Run() error {
 		return err
 	}
 
+	if err := c.seedState(); err != nil {
+		return err
+	}
+
 	c.clientPrefix = c.discordUserPrefix(me)
 
 	if err := c.sendGreeting(); err != nil {
@@ -252,6 +258,27 @@ func (c *Client) sendGreeting() error {
 
 	if err := replies.ERR_NOMOTD(c); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (c *Client) seedState() error {
+	if c.guild.Valid() {
+		return nil
+	}
+
+	channels, err := c.session.PrivateChannels()
+	if err != nil {
+		return err
+	}
+
+	for _, channel := range channels {
+		if channel.Type != discord.DirectMessage {
+			continue
+		}
+		recip := channel.DMRecipients[0]
+		c.session.UserName(recip.ID, recip.Username)
 	}
 
 	return nil

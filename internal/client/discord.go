@@ -44,7 +44,9 @@ func (c *Client) sendDiscordMessage(m *discord.Message) error {
 		channelName = c.session.UserName(recip.ID, recip.Username)
 	}
 
-	c.sendJoin(channel)
+	if !c.guild.Valid() {
+		c.sendJoin(channel)
+	}
 
 	message, err := render.Message(c.session, m)
 	if err != nil {

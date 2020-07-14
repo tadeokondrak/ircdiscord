@@ -20,6 +20,7 @@ type Client struct {
 	lastMessageID discord.Snowflake // used to prevent duplicate messages
 	capabilities  map[string]bool   // ircv3 capabilities
 	discordDebug  bool              // whether to log Discord interaction
+	errors        chan error
 }
 
 func New(conn net.Conn, ircDebug, discordDebug bool) *Client {
@@ -33,6 +34,7 @@ func New(conn net.Conn, ircDebug, discordDebug bool) *Client {
 		client:       client,
 		capabilities: make(map[string]bool),
 		discordDebug: discordDebug,
+		errors:       make(chan error),
 	}
 
 	c.client.Server = c
@@ -66,13 +68,12 @@ func (c *Client) Run() error {
 	defer log.Printf("disconnected: %v", c.client.ClientPrefix().Name)
 
 	msgs := make(chan *irc.Message)
-	errors := make(chan error)
 
 	go func() {
 		for {
 			msg, err := c.client.ReadMessage()
 			if err != nil {
-				errors <- err
+				c.errors <- err
 				return
 			}
 			msgs <- msg
@@ -85,7 +86,7 @@ func (c *Client) Run() error {
 			if err := c.client.HandleMessage(msg); err != nil {
 				return err
 			}
-		case err := <-errors:
+		case err := <-c.errors:
 			return err
 		}
 	}
@@ -108,7 +109,7 @@ func (c *Client) Run() error {
 			if err := c.handleDiscordEvent(event); err != nil {
 				return err
 			}
-		case err := <-errors:
+		case err := <-c.errors:
 			return err
 		}
 	}

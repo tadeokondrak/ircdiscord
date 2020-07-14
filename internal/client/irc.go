@@ -154,7 +154,6 @@ func (c *Client) HandleJoin(name string) error {
 var actionRegex = regexp.MustCompile(`^\x01ACTION (.*)\x01$`)
 
 func (c *Client) HandleMessage(channel, content string) error {
-
 	var channelID discord.Snowflake
 	if c.isGuild() {
 		channelID = c.session.ChannelFromName(c.guild, channel)
@@ -192,23 +191,14 @@ var editRegex = regexp.MustCompile(`^s/((?:\\/|[^/])*)/((?:\\/|[^/])*)(?:/(g?))?
 
 func (c *Client) handleRegexEdit(channelName string,
 	channelID discord.Snowflake, content string) error {
-	bail := func(format string, args ...interface{}) error {
-		return nil
-		/*
-			return replies.NOTICE(
-				c, c.ServerPrefix(), channelName,
-				fmt.Sprintf(format, args...))
-		*/
-	}
-
 	matches := editRegex.FindStringSubmatch(content)
 	if matches == nil {
-		return bail("invalid replacement")
+		return fmt.Errorf("invalid replacement")
 	}
 
 	regex, err := regexp.Compile(content)
 	if err != nil {
-		return bail("failed to compile regex: %v", err)
+		return fmt.Errorf("failed to compile regex: %v", err)
 	}
 
 	channel := c.session.ChannelFromName(c.guild,
@@ -236,7 +226,7 @@ func (c *Client) handleRegexEdit(channelName string,
 	}
 
 	if !snowflake.Valid() {
-		return bail("failed to find your message")
+		return fmt.Errorf("failed to find your message")
 	}
 
 	message, err := c.session.Message(channel, snowflake)
@@ -251,13 +241,13 @@ func (c *Client) handleRegexEdit(channelName string,
 	if matches[3] == "g" {
 		result = regex.ReplaceAllString(beforeEdit, matches[2])
 		if result == beforeEdit {
-			return bail("no matches")
+			return fmt.Errorf("no matches")
 		}
 
 	} else {
 		match := regex.FindStringSubmatchIndex(beforeEdit)
 		if match == nil {
-			return bail("no matches")
+			return fmt.Errorf("no matches")
 		}
 
 		dst := []byte{}

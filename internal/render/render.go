@@ -15,7 +15,7 @@ import (
 )
 
 func Content(guildID discord.Snowflake, sess *session.Session, source []byte, m *discord.Message) string {
-	parsed := md.ParseWithMessage(source, sess, m, false)
+	parsed := md.ParseWithMessage(source, sess.Store, m, false)
 	var s strings.Builder
 	var walker func(n ast.Node, enter bool) (ast.WalkStatus, error)
 	walker = func(n ast.Node, enter bool) (ast.WalkStatus, error) {
@@ -112,7 +112,11 @@ func Content(guildID discord.Snowflake, sess *session.Session, source []byte, m 
 				case n.Channel != nil:
 					fmt.Fprintf(&s, "\x02\x0302#%s\x03\x02", n.Channel.Name)
 				case n.GuildUser != nil:
-					fmt.Fprintf(&s, "\x02\x0302@%s\x03\x02", sess.UserName(guildID, n.GuildUser.User.ID, n.GuildUser.User.Username))
+					name, err := sess.UserName(guildID, n.GuildUser.User.ID)
+					if err != nil {
+						name = n.GuildUser.User.Username
+					}
+					fmt.Fprintf(&s, "\x02\x0302@%s\x03\x02", name)
 				}
 			}
 		case *ast.String:

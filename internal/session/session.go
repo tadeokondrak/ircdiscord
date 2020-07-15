@@ -11,18 +11,20 @@ import (
 
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/gateway"
+	"github.com/diamondburned/arikawa/handler"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/arikawa/utils/httputil/httpdriver"
+	"github.com/diamondburned/ningen"
 	"github.com/tadeokondrak/ircdiscord/internal/idmap"
 )
 
-// Session is the reference-counted shared state between all Clients of a
-// specific Discord user.
-//
-// It notably includes the Discord state, as well as a map of IRC
-// nick/channel names to Discord IDs.
+// Session is the reference-counted shared state between all clients for a
+// Discord user.
 type Session struct {
-	*state.State
+	*ningen.State
+	SessionHandler   *handler.Handler
+	userMap          map[discord.Snowflake]string
+	userMapMutex     sync.RWMutex
 	nickMaps         map[discord.Snowflake]*idmap.IDMap
 	nickMapsMutex    sync.RWMutex
 	channelMaps      map[discord.Snowflake]*idmap.IDMap
@@ -37,10 +39,19 @@ var (
 	sessionLock sync.Mutex
 )
 
+func (s *Session) Messages(
+	channelID discord.Snowflake) ([]discord.Message, error) {
+	messages, err := s.State.Messages(channelID)
+	if err == nil {
+		s.harvestMessages(messages)
+	}
+	return messages, err
+}
+
 // Get returns the Session for a given token, connecting to Discord if
 // it does not already exist. If the session does not already exist, and
 // debug is true, the newly created session will log information to stderr.
-func Get(token string, debug bool) (*Session, error) {
+func Get(token string, enableDebug bool) (*Session, error) {
 	sessionLock.Lock()
 	defer sessionLock.Unlock()
 
@@ -51,34 +62,51 @@ func Get(token string, debug bool) (*Session, error) {
 		}
 	}
 
-	state, err := state.New(token)
+	plainstate, err := state.New(token)
 	if err != nil {
 		return nil, err
 	}
 
-	if debug {
-		state.AddHandler(func(e interface{}) { fmt.Printf("<-d %T\n", e) })
-		state.OnRequest = append(state.OnRequest, func(r httpdriver.Request) error {
-			fmt.Printf("d-> %s\n", r.GetPath())
-			return nil
+	state, err := ningen.FromState(plainstate)
+	if err != nil {
+		return nil, err
+	}
+	state.PreHandler = handler.New()
+	state.PreHandler.Synchronous = false
+
+	if enableDebug {
+		state.AddHandler(func(e interface{}) {
+			fmt.Printf("<-d %T\n", e)
 		})
+		state.OnRequest = append(state.OnRequest,
+			func(r httpdriver.Request) error {
+				fmt.Printf("->d %s\n", r.GetPath())
+				return nil
+			},
+		)
 	}
 
-	events, cancel := state.ChanFor(func(e interface{}) bool { _, ok := e.(*gateway.ReadyEvent); return ok })
+	events, cancel := state.ChanFor(func(e interface{}) bool {
+		_, ok := e.(*gateway.ReadyEvent)
+		return ok
+	})
 	defer cancel()
+
+	session := &Session{
+		State:          state,
+		SessionHandler: handler.New(),
+		userMap:        make(map[discord.Snowflake]string),
+		nickMaps:       make(map[discord.Snowflake]*idmap.IDMap),
+		channelMaps:    make(map[discord.Snowflake]*idmap.IDMap),
+		refs:           0,
+	}
+	state.PreHandler.AddHandler(session.onEventHarvest)
 
 	if err := state.Open(); err != nil {
 		return nil, err
 	}
 
 	<-events
-
-	session := &Session{
-		State:       state,
-		nickMaps:    make(map[discord.Snowflake]*idmap.IDMap),
-		channelMaps: make(map[discord.Snowflake]*idmap.IDMap),
-		refs:        0,
-	}
 
 	me, err := state.Me()
 	if err != nil {
@@ -109,7 +137,7 @@ func (s *Session) Unref() error {
 	return nil
 }
 
-// Close closes the Discord connection. This should not generally be called,
+// Close closes the Discord connection. This should generally not be called,
 // since Unref closes the connection on last disconnect.
 func (s *Session) Close() error {
 	return s.State.Close()
@@ -139,23 +167,71 @@ func (s *Session) channelMap(guild discord.Snowflake) *idmap.IDMap {
 	return safeGetMap(s.channelMaps, guild, &s.channelMapsMutex)
 }
 
+func (s *Session) plainUsername(userID discord.Snowflake) (string, error) {
+	s.userMapMutex.RLock()
+	name, ok := s.userMap[userID]
+	s.userMapMutex.RUnlock()
+	if ok {
+		return name, nil
+	}
+
+	user, err := s.User(userID)
+	if err != nil {
+		return "", err
+	}
+	s.harvestUser(user)
+
+	return user.Username, nil
+}
+
+var ErrInvalidSnowflake = errors.New("invalid snowflake given")
+
 // UserName returns the IRC nickname for the given Discord user.
-func (s *Session) UserName(guild discord.Snowflake, id discord.Snowflake, name string) string {
+func (s *Session) UserName(guild discord.Snowflake, id discord.Snowflake) (string, error) {
 	if !id.Valid() {
-		return sanitizeNick(name)
+		return "", ErrInvalidSnowflake
 	}
 
 	nickMap := s.nickMap(guild)
 
 	if name := nickMap.Name(id); name != "" {
-		return name
+		return name, nil
 	}
 
-	return nickMap.Insert(id, sanitizeNick(name))
+	var name string
+	if guild.Valid() {
+		member, err := s.Store.Member(guild, id)
+		if err == state.ErrStoreNotFound {
+			var err error
+			name, err = s.plainUsername(id)
+			if err != nil {
+				return "", err
+			}
+			s.MemberState.RequestMember(guild, id)
+			goto insert
+		} else if err != nil {
+			return "", err
+		}
+		if member.Nick != "" {
+			name = member.Nick
+		} else {
+			name = member.User.Username
+		}
+	} else {
+		var err error
+		name, err = s.plainUsername(id)
+		if err != nil {
+			return "", err
+		}
+	}
+
+insert:
+	return nickMap.Insert(id, sanitizeNick(name)), nil
 }
 
 // UserFromName returns the Discord user for the given IRC nickname.
-func (s *Session) UserFromName(guild discord.Snowflake, name string) discord.Snowflake {
+func (s *Session) UserFromName(guild discord.Snowflake,
+	name string) discord.Snowflake {
 	nickMap := s.nickMap(guild)
 	return nickMap.Snowflake(name)
 }
@@ -163,14 +239,16 @@ func (s *Session) UserFromName(guild discord.Snowflake, name string) discord.Sno
 var ErrNoChannel = errors.New("no channel by that name exists")
 
 // ChannelFromName returns the Discord channel for a given IRC channel name.
-func (s *Session) ChannelFromName(guild discord.Snowflake, name string) discord.Snowflake {
+func (s *Session) ChannelFromName(guild discord.Snowflake,
+	name string) discord.Snowflake {
 	channelMap := s.channelMap(guild)
-	return channelMap.Snowflake(strings.TrimPrefix(name, "#"))
+	name = strings.TrimPrefix(name, "#")
+	return channelMap.Snowflake(name)
 }
 
 // ChannelName returns the IRC channel name for the given Discord channel ID.
-// It includes the leading #.
-func (s *Session) ChannelName(guild discord.Snowflake, id discord.Snowflake) (string, error) {
+func (s *Session) ChannelName(guild discord.Snowflake,
+	id discord.Snowflake) (string, error) {
 	channelMap := s.channelMap(guild)
 
 	if name := channelMap.Name(id); name != "" {
@@ -182,7 +260,8 @@ func (s *Session) ChannelName(guild discord.Snowflake, id discord.Snowflake) (st
 		return "", err
 	}
 
-	return fmt.Sprintf("#%s", channelMap.Insert(channel.ID, channel.Name)), nil
+	name := channelMap.Insert(channel.ID, channel.Name)
+	return fmt.Sprintf("#%s", name), nil
 }
 
 // sanitizeNick removes characters invalid in an IRC nickname from a string.

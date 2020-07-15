@@ -8,9 +8,13 @@ import (
 )
 
 func (c *Client) discordUserPrefix(u *discord.User) *irc.Prefix {
+	name, err := c.session.UserName(c.guild, u.ID)
+	if err != nil {
+		name = u.Username
+	}
 	return &irc.Prefix{
-		User: c.session.UserName(c.guild, u.ID, u.Username),
-		Name: c.session.UserName(c.guild, u.ID, u.Username),
+		User: name,
+		Name: name,
 		Host: u.ID.String(),
 	}
 }
@@ -19,7 +23,7 @@ func (c *Client) sendDiscordMessage(m *discord.Message, autojoin bool) error {
 	// TODO: arikawa should store relationships in its state
 	for _, rel := range c.session.Ready.Relationships {
 		if rel.User.ID == m.Author.ID &&
-			rel.Type == gateway.BlockedRelationship {
+			rel.Type == discord.BlockedRelationship {
 			return nil
 		}
 	}
@@ -31,7 +35,7 @@ func (c *Client) sendDiscordMessage(m *discord.Message, autojoin bool) error {
 
 	var channelName string
 
-	if c.guild.Valid() {
+	if c.isGuild() {
 		var err error
 		channelName, err = c.session.ChannelName(m.GuildID, m.ChannelID)
 		if err != nil {
@@ -39,10 +43,14 @@ func (c *Client) sendDiscordMessage(m *discord.Message, autojoin bool) error {
 		}
 	} else {
 		recip := channel.DMRecipients[0]
-		channelName = c.session.UserName(c.guild, recip.ID, recip.Username)
+		var err error
+		channelName, err = c.session.UserName(c.guild, recip.ID)
+		if err != nil {
+			channelName = recip.Username
+		}
 	}
 
-	if autojoin && !c.guild.Valid() && !c.ilayer.InChannel(channelName) {
+	if autojoin && !c.ilayer.InChannel(channelName) {
 		return c.HandleJoin(channelName)
 	}
 
@@ -106,12 +114,14 @@ func (c *Client) handleDiscordEvent(e gateway.Event) error {
 	case *gateway.UserSettingsUpdateEvent:
 	case *gateway.UserGuildSettingsUpdateEvent:
 	case *gateway.UserNoteUpdateEvent:
+	case *gateway.RelationshipAddEvent:
+	case *gateway.RelationshipRemoveEvent:
 	}
 	return nil
 }
 
 func (c *Client) handleDiscordMessage(m *discord.Message) error {
-	if c.guild.Valid() {
+	if c.isGuild() {
 		if m.GuildID != c.guild {
 			return nil
 		}
@@ -129,5 +139,5 @@ func (c *Client) handleDiscordMessage(m *discord.Message) error {
 		return nil
 	}
 
-	return c.sendDiscordMessage(m, true)
+	return c.sendDiscordMessage(m, !c.isGuild())
 }

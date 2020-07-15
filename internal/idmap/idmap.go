@@ -31,12 +31,12 @@ func New() *IDMap {
 // Name returns the IRC name for a Discord ID.
 // It returns the empty string if missing.
 func (m *IDMap) Name(id discord.Snowflake) string {
+	if !id.Valid() {
+		panic("invalid ID")
+	}
 	if m.Concurrent {
 		m.mu.RLock()
 		defer m.mu.RUnlock()
-	}
-	if !id.Valid() {
-		panic("invalid ID")
 	}
 	if name, ok := m.forward[id]; ok {
 		return name
@@ -73,15 +73,82 @@ func (m *IDMap) Insert(id discord.Snowflake, ideal string) string {
 	name := sanitize(ideal)
 	for {
 		_, ok := m.backward[name]
-		if ok {
+		if name == "" || ok {
 			name = mangle(name, int64(id))
 			continue
 		}
 		break
 	}
+	if name == "" {
+		panic("about to set empty name")
+	}
 	m.forward[id] = name
 	m.backward[name] = id
 	return name
+}
+
+func (m *IDMap) InsertWithChangeCallback(id discord.Snowflake, ideal string,
+	changeCallback func(pre, post string)) string {
+	if !id.Valid() {
+		panic("invalid ID")
+	}
+
+	if m.Concurrent {
+		m.mu.RLock()
+	}
+	oldName, oldNameExists := m.forward[id]
+	if m.Concurrent {
+		m.mu.RUnlock()
+	}
+
+	change := false
+	if oldNameExists {
+		split := strings.SplitN(oldName, "#", 2)
+		change = split[0] != ideal
+
+		if !change {
+			return oldName
+		}
+	}
+
+	if m.Concurrent {
+		m.mu.Lock()
+	}
+
+	newName := sanitize(ideal)
+	for {
+		_, ok := m.backward[newName]
+		if newName == "" || ok {
+			newName = mangle(newName, int64(id))
+			continue
+		}
+		break
+	}
+
+	if m.Concurrent {
+		m.mu.Unlock()
+	}
+
+	if newName == "" {
+		panic("about to set empty name")
+	}
+
+	m.forward[id] = newName
+	m.backward[newName] = id
+
+	if oldNameExists {
+		if m.Concurrent {
+			m.mu.Lock()
+		}
+		delete(m.backward, oldName)
+		if m.Concurrent {
+			m.mu.Unlock()
+		}
+	}
+
+	changeCallback(oldName, newName)
+
+	return newName
 }
 
 func (m *IDMap) Delete(id discord.Snowflake) {

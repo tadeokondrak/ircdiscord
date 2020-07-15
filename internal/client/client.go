@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
+	"github.com/diamondburned/arikawa/gateway"
 	"github.com/tadeokondrak/ircdiscord/internal/ilayer"
+	"github.com/tadeokondrak/ircdiscord/internal/replies"
 	"github.com/tadeokondrak/ircdiscord/internal/session"
 	"gopkg.in/irc.v3"
 )
@@ -43,6 +45,7 @@ func New(conn net.Conn, ircDebug, discordDebug bool) *Client {
 		c.ircconn.Reader.DebugCallback = func(line string) {
 			log.Printf("<-i %s", line)
 		}
+
 		c.ircconn.Writer.DebugCallback = func(line string) {
 			log.Printf("->i %s", line)
 		}
@@ -91,13 +94,13 @@ func (c *Client) Run() error {
 		}
 	}
 
-	trueFunc := func(e interface{}) bool { return true }
-	events, cancel := c.session.ChanFor(trueFunc)
+	events, cancel := c.session.ChanFor(
+		func(interface{}) bool { return true })
 	defer cancel()
 
-	if err := c.seedState(); err != nil {
-		return err
-	}
+	sessionEvents, sessionCancel := c.session.SessionHandler.ChanFor(
+		func(interface{}) bool { return true })
+	defer sessionCancel()
 
 	for {
 		select {
@@ -107,6 +110,10 @@ func (c *Client) Run() error {
 			}
 		case event := <-events:
 			if err := c.handleDiscordEvent(event); err != nil {
+				return err
+			}
+		case event := <-sessionEvents:
+			if err := c.handleSessionEvent(event); err != nil {
 				return err
 			}
 		case err := <-c.errors:
@@ -160,7 +167,7 @@ func (c *Client) seedState() error {
 				continue
 			}
 			recip := channel.DMRecipients[0]
-			c.session.UserName(c.guild, recip.ID, recip.Username)
+			c.session.UserName(c.guild, recip.ID)
 		}
 	}
 
@@ -205,4 +212,20 @@ func (c *Client) ServerCreated() (time.Time, error) {
 
 func (c *Client) MOTD() ([]string, error) {
 	return []string{}, nil
+}
+
+func (c *Client) handleSessionEvent(e gateway.Event) error {
+	switch e := e.(type) {
+	case *session.UserNameChange:
+		if e.GuildID == c.guild {
+			prefix := &irc.Prefix{
+				User: e.Old,
+				Name: e.Old,
+				Host: e.ID.String(),
+			}
+			replies.NICK(c.ilayer, prefix, e.New)
+		}
+	case *session.ChannelNameChange:
+	}
+	return nil
 }

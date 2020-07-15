@@ -39,6 +39,10 @@ func (c *Client) HandleRegister() error {
 
 	c.ilayer.SetClientPrefix(c.discordUserPrefix(me))
 
+	if err := c.seedState(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -307,8 +311,12 @@ func (c *Client) HandleList() ([]ilayer.ListEntry, error) {
 
 			recip := channel.DMRecipients[0]
 
-			entry.Channel = c.session.UserName(
-				c.guild, recip.ID, recip.Username)
+			entry.Channel, err = c.session.UserName(
+				c.guild, recip.ID)
+			if err != nil {
+				entry.Channel = recip.Username
+			}
+
 			entry.Topic = fmt.Sprintf("Direct message with %s#%s",
 				recip.Username, recip.Discriminator)
 

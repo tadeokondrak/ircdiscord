@@ -99,6 +99,18 @@ func (m *IDMap) Insert(
 	return oldName, newName
 }
 
+// Access allows access to the internal storage.
+//
+// Do not modify the maps.
+// Calling any other method from inside the callback may deadlock.
+func (m *IDMap) Access(
+	access func(forward map[discord.Snowflake]string,
+		backward map[string]discord.Snowflake)) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	access(m.forward, m.backward)
+}
+
 func (m *IDMap) nameHeldRLock(id discord.Snowflake) string {
 	if !id.Valid() {
 		panic("Name: invalid ID")

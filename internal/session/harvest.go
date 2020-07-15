@@ -54,8 +54,7 @@ func (s *Session) harvestNick(guild, user discord.Snowflake, nick, username stri
 			Old:     pre,
 			New:     post,
 		}
-		s.SessionHandler.Call(ev)
-
+		s.internalHandler.Call(ev)
 	}
 }
 

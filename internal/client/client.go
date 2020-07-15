@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
 	"github.com/tadeokondrak/ircdiscord/internal/ilayer"
 	"github.com/tadeokondrak/ircdiscord/internal/replies"
 	"github.com/tadeokondrak/ircdiscord/internal/session"
@@ -23,6 +22,7 @@ type Client struct {
 	capabilities  map[string]bool   // ircv3 capabilities
 	discordDebug  bool              // whether to log Discord interaction
 	errors        chan error        // send errors here from goroutines
+	cancels       []func()
 }
 
 func New(conn net.Conn, ircDebug, discordDebug bool) *Client {
@@ -57,6 +57,10 @@ func New(conn net.Conn, ircDebug, discordDebug bool) *Client {
 func (c *Client) Close() error {
 	if c.session != nil {
 		c.session.Unref()
+	}
+
+	for _, cancel := range c.cancels {
+		cancel()
 	}
 
 	return c.netconn.Close()
@@ -98,9 +102,11 @@ func (c *Client) Run() error {
 		func(interface{}) bool { return true })
 	defer cancel()
 
-	sessionEvents, sessionCancel := c.session.SessionHandler.ChanFor(
-		func(interface{}) bool { return true })
-	defer sessionCancel()
+	listCancel := c.session.SubscribeUserList(c.guild,
+		func(e *session.UserNameChange) {
+			c.handleUsernameChange(e, "")
+		})
+	defer listCancel()
 
 	for {
 		select {
@@ -110,10 +116,6 @@ func (c *Client) Run() error {
 			}
 		case event := <-events:
 			if err := c.handleDiscordEvent(event); err != nil {
-				return err
-			}
-		case event := <-sessionEvents:
-			if err := c.handleSessionEvent(event); err != nil {
 				return err
 			}
 		case err := <-c.errors:
@@ -214,29 +216,28 @@ func (c *Client) MOTD() ([]string, error) {
 	return []string{}, nil
 }
 
-func (c *Client) handleSessionEvent(e gateway.Event) error {
-	switch e := e.(type) {
-	case *session.UserNameChange:
-		if e.GuildID == c.guild {
-			if e.Old != "" {
+// This function is called from multiple goroutines.
+func (c *Client) handleUsernameChange(e *session.UserNameChange,
+	channel string) {
+	if e.GuildID == c.guild && c.isGuild() {
+		if e.Old != "" {
+			if channel == "" {
 				prefix := &irc.Prefix{
 					User: e.Old,
 					Name: e.Old,
 					Host: e.ID.String(),
 				}
 				replies.NICK(c.ilayer, prefix, e.New)
-			} else {
-				prefix := &irc.Prefix{
-					User: e.New,
-					Name: e.New,
-					Host: e.ID.String(),
-				}
-				for _, channel := range c.ilayer.Channels() {
-					replies.JOIN(c.ilayer, prefix, channel)
-				}
+			}
+		} else {
+			prefix := &irc.Prefix{
+				User: e.New,
+				Name: e.New,
+				Host: e.ID.String(),
+			}
+			if channel != "" {
+				replies.JOIN(c.ilayer, prefix, channel)
 			}
 		}
-	case *session.ChannelNameChange:
 	}
-	return nil
 }

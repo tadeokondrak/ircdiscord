@@ -112,7 +112,8 @@ func (c *Client) Channels() []string {
 	return channels
 }
 
-func (c *Client) Join(channel, topic string, created time.Time) error {
+func (c *Client) Join(channel, topic string, created time.Time,
+	names []string) error {
 	if err := replies.JOIN(c, c.ClientPrefix(), channel); err != nil {
 		return err
 	}
@@ -126,6 +127,16 @@ func (c *Client) Join(channel, topic string, created time.Time) error {
 	}
 
 	if err := replies.RPL_CREATIONTIME(c, channel, created); err != nil {
+		return err
+	}
+
+	for _, name := range names {
+		if err := replies.RPL_NAMREPLY(c, channel, name); err != nil {
+			return err
+		}
+	}
+
+	if err := replies.RPL_ENDOFNAMES(c, channel); err != nil {
 		return err
 	}
 

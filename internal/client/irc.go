@@ -1,6 +1,7 @@
 package client
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -47,6 +48,18 @@ func (c *Client) HandleRegister() error {
 }
 
 func (c *Client) HandleNickname(nickname string) (string, error) {
+	if !c.ilayer.IsRegistered() {
+		return nickname, nil
+	}
+	if c.isGuild() {
+		if err := c.session.ChangeOwnNickname(
+			c.guild, nickname); err != nil {
+			return "", err
+		}
+	} else {
+		return "",
+			fmt.Errorf("cannot change nickname outside of server")
+	}
 	return nickname, nil
 }
 
@@ -97,9 +110,11 @@ func (c *Client) HandlePing(nonce string) (string, error) {
 	return nonce, nil
 }
 
+var ErrAlreadyInChannel = errors.New("already in channel")
+
 func (c *Client) HandleJoin(name string) error {
 	if c.ilayer.InChannel(name) {
-		return nil
+		return ErrAlreadyInChannel
 	}
 
 	var channel *discord.Channel
@@ -136,8 +151,20 @@ func (c *Client) HandleJoin(name string) error {
 		}
 	}
 
+	names := []string{}
+
+	cancel := c.session.SubscribeUserList(c.guild,
+		func(e *session.UserNameChange) {
+			if e.IsInitial {
+				names = append(names, e.New)
+			} else {
+				c.handleUsernameChange(e, channelName)
+			}
+		})
+	c.cancels = append(c.cancels, cancel)
+
 	if err := c.ilayer.Join(channelName, channel.Topic,
-		channel.ID.Time()); err != nil {
+		channel.ID.Time(), names); err != nil {
 		return err
 	}
 

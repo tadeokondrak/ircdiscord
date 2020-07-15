@@ -255,3 +255,19 @@ func RPL_ENDOFWHOIS(w Writer, user string) error {
 			user, "End of /WHOIS list"},
 	})
 }
+
+func RPL_NAMREPLY(w Writer, channel string, name string) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_NAMREPLY,
+		Params:  []string{w.ClientPrefix().Name, "=", channel, name},
+	})
+}
+
+func RPL_ENDOFNAMES(w Writer, channel string) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_ENDOFNAMES,
+		Params:  []string{w.ClientPrefix().Name, channel, "End of /NAMES list"},
+	})
+}

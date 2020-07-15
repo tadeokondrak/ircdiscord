@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/handler"
 	"github.com/diamondburned/arikawa/state"
 	"github.com/diamondburned/arikawa/utils/httputil/httpdriver"
@@ -22,7 +21,7 @@ import (
 // Discord user.
 type Session struct {
 	*ningen.State
-	SessionHandler   *handler.Handler
+	internalHandler  *handler.Handler
 	userMap          map[discord.Snowflake]string
 	userMapMutex     sync.RWMutex
 	nickMaps         map[discord.Snowflake]*idmap.IDMap
@@ -71,8 +70,6 @@ func Get(token string, enableDebug bool) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	state.PreHandler = handler.New()
-	state.PreHandler.Synchronous = false
 
 	if enableDebug {
 		state.AddHandler(func(e interface{}) {
@@ -86,27 +83,19 @@ func Get(token string, enableDebug bool) (*Session, error) {
 		)
 	}
 
-	events, cancel := state.ChanFor(func(e interface{}) bool {
-		_, ok := e.(*gateway.ReadyEvent)
-		return ok
-	})
-	defer cancel()
-
 	session := &Session{
-		State:          state,
-		SessionHandler: handler.New(),
-		userMap:        make(map[discord.Snowflake]string),
-		nickMaps:       make(map[discord.Snowflake]*idmap.IDMap),
-		channelMaps:    make(map[discord.Snowflake]*idmap.IDMap),
-		refs:           0,
+		State:           state,
+		internalHandler: handler.New(),
+		userMap:         make(map[discord.Snowflake]string),
+		nickMaps:        make(map[discord.Snowflake]*idmap.IDMap),
+		channelMaps:     make(map[discord.Snowflake]*idmap.IDMap),
+		refs:            0,
 	}
-	state.PreHandler.AddHandler(session.onEventHarvest)
+	state.AddHandler(session.onEventHarvest)
 
 	if err := state.Open(); err != nil {
 		return nil, err
 	}
-
-	<-events
 
 	me, err := state.Me()
 	if err != nil {
@@ -234,7 +223,7 @@ insert:
 			Old:     pre,
 			New:     post,
 		}
-		s.SessionHandler.Call(ev)
+		s.internalHandler.Call(ev)
 	}
 
 	return post, nil
@@ -245,6 +234,26 @@ func (s *Session) UserFromName(guild discord.Snowflake,
 	name string) discord.Snowflake {
 	nickMap := s.nickMap(guild)
 	return nickMap.Snowflake(name)
+}
+
+// While IsInitial is true, the callback will only be called in one goroutine.
+// This function blocks until all events with IsInitial are sent.
+func (s *Session) SubscribeUserList(guild discord.Snowflake,
+	handler func(*UserNameChange)) (cancel func()) {
+	nickMap := s.nickMap(guild)
+	nickMap.Access(func(forward map[discord.Snowflake]string,
+		backward map[string]discord.Snowflake) {
+		var change UserNameChange
+		change.GuildID = guild
+		change.IsInitial = true
+		for id, name := range forward {
+			change.ID = id
+			change.New = name
+			handler(&change)
+		}
+		cancel = s.internalHandler.AddHandler(handler)
+	})
+	return
 }
 
 var ErrNoChannel = errors.New("no channel by that name exists")

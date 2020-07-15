@@ -51,7 +51,11 @@ func (c *Client) sendDiscordMessage(m *discord.Message, autojoin bool) error {
 	}
 
 	if autojoin && !c.ilayer.InChannel(channelName) {
-		return c.HandleJoin(channelName)
+		err := c.HandleJoin(channelName)
+		if err == ErrAlreadyInChannel {
+			err = nil
+		}
+		return err
 	}
 
 	message, err := render.Message(c.guild, c.session, m)

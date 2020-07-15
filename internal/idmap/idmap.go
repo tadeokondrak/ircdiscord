@@ -198,11 +198,9 @@ func (m *IDMap) Insert(
 
 	m.setNameHeldLock(id, newName, true)
 	m.setIDHeldLock(id, newName, false)
-	if oldName != "" {
-		m.deleteNameHeldLock(id, oldName, true)
-	}
 
 	if oldName != "" {
+		m.deleteNameHeldLock(id, oldName, true)
 	}
 
 	return oldName, newName

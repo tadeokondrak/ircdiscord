@@ -10,14 +10,13 @@ import (
 )
 
 // IDMap is a map between Discord ID/name pairs and IRC names.
+//
 // There may be multiple Discord names with the same name but different IDs,
 // with different IRC names guaranteed by the map.
-// It is not safe to use concurrently from multiple goroutines if Concurrent is not set.
 type IDMap struct {
-	forward    map[discord.Snowflake]string
-	backward   map[string]discord.Snowflake
-	mu         sync.RWMutex
-	Concurrent bool
+	forward  map[discord.Snowflake]string
+	backward map[string]discord.Snowflake
+	mu       sync.RWMutex
 }
 
 // New creates a new IDMap.
@@ -29,141 +28,184 @@ func New() *IDMap {
 }
 
 // Name returns the IRC name for a Discord ID.
+//
 // It returns the empty string if missing.
+// It panics if passed an invalid snowflake.
 func (m *IDMap) Name(id discord.Snowflake) string {
-	if !id.Valid() {
-		panic("invalid ID")
-	}
-	if m.Concurrent {
-		m.mu.RLock()
-		defer m.mu.RUnlock()
-	}
-	if name, ok := m.forward[id]; ok {
-		return name
-	}
-	return ""
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.nameHeldRLock(id)
 }
 
 // Snowflake returns the Discord ID from an IRC name.
-// It returns the null snowflake if missing.
+//
+// It returns the zero snowflake if missing.
+// It panics if passed the empty string.
 func (m *IDMap) Snowflake(name string) discord.Snowflake {
-	if m.Concurrent {
-		m.mu.RLock()
-		defer m.mu.RUnlock()
-	}
-	if name == "" {
-		panic("invalid IRC name")
-	}
-	if flake, ok := m.backward[name]; ok {
-		return flake
-	}
-	return discord.Snowflake(0)
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.snowflakeHeldRLock(name)
 }
 
-// Insert returns an IRC name for a given Discord ID.
-// It returns ideal if there were no collisions.
-func (m *IDMap) Insert(id discord.Snowflake, ideal string) string {
-	if name := m.Name(id); name != "" {
-		return name
+// DeleteSnowflake removes an ID from the map, returning whether it did anything.
+func (m *IDMap) DeleteSnowflake(id discord.Snowflake) bool {
+	name := m.Name(id)
+	if name == "" {
+		// no-op, already deleted
+		return false
 	}
-	if m.Concurrent {
-		m.mu.Lock()
-		defer m.mu.Unlock()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	name = m.nameHeldRLock(id)
+	if name == "" {
+		// deleted between rlock release/lock acquire
+		return false
 	}
+
+	return m.deleteHeldLock(id, name)
+}
+
+func (m *IDMap) nameHeldRLock(id discord.Snowflake) string {
+	if !id.Valid() {
+		panic("Name: invalid ID")
+	}
+
+	return m.forward[id]
+}
+
+func (m *IDMap) snowflakeHeldRLock(name string) discord.Snowflake {
+	if name == "" {
+		panic("Snowflake: invalid name")
+	}
+
+	return m.backward[name]
+}
+
+func (m *IDMap) deleteHeldLock(id discord.Snowflake, name string) bool {
+	forwardPresent := m.deleteSnowflakeHeldLock(id, name, false)
+	backwardPresent := m.deleteNameHeldLock(id, name, false)
+
+	if forwardPresent != backwardPresent {
+		if forwardPresent {
+			panic("Delete: ID was present but not name")
+		} else {
+			panic("Delete: Name was present but not ID")
+		}
+	}
+
+	return forwardPresent || backwardPresent
+}
+
+func (m *IDMap) deleteSnowflakeHeldLock(id discord.Snowflake,
+	name string, panicIfMissing bool) bool {
+	present := m.nameHeldRLock(id) != ""
+
+	if present {
+		delete(m.forward, id)
+	} else if panicIfMissing {
+		panic("deleteSnowflakeHeldLock: " +
+			"tried to delete non-existent snowflake")
+	}
+
+	return present
+}
+
+func (m *IDMap) deleteNameHeldLock(id discord.Snowflake, name string,
+	panicIfMissing bool) bool {
+	present := m.snowflakeHeldRLock(name).Valid()
+
+	if present {
+		delete(m.backward, name)
+	} else if panicIfMissing {
+		panic("deleteSnowflakeHeldLock: " +
+			"tried to delete non-existent snowflake")
+	}
+
+	return present
+}
+
+func (m *IDMap) getNewNameHeldRLock(id discord.Snowflake, ideal string) string {
 	name := sanitize(ideal)
+
 	for {
-		_, ok := m.backward[name]
-		if name == "" || ok {
+		if name == "" || m.snowflakeHeldRLock(name).Valid() {
 			name = mangle(name, int64(id))
 			continue
 		}
+
 		break
 	}
-	if name == "" {
-		panic("about to set empty name")
-	}
-	m.forward[id] = name
-	m.backward[name] = id
+
 	return name
 }
 
-func (m *IDMap) InsertWithChangeCallback(id discord.Snowflake, ideal string,
-	changeCallback func(pre, post string)) string {
-	if !id.Valid() {
-		panic("invalid ID")
-	}
-
-	if m.Concurrent {
-		m.mu.RLock()
-	}
-	oldName, oldNameExists := m.forward[id]
-	if m.Concurrent {
-		m.mu.RUnlock()
-	}
-
-	change := false
-	if oldNameExists {
-		split := strings.SplitN(oldName, "#", 2)
-		change = split[0] != ideal
-
-		if !change {
-			return oldName
-		}
-	}
-
-	if m.Concurrent {
-		m.mu.Lock()
-	}
-
-	newName := sanitize(ideal)
-	for {
-		_, ok := m.backward[newName]
-		if newName == "" || ok {
-			newName = mangle(newName, int64(id))
-			continue
-		}
-		break
-	}
-
-	if m.Concurrent {
-		m.mu.Unlock()
-	}
-
-	if newName == "" {
-		panic("about to set empty name")
-	}
-
-	m.forward[id] = newName
-	m.backward[newName] = id
-
-	if oldNameExists {
-		if m.Concurrent {
-			m.mu.Lock()
-		}
-		delete(m.backward, oldName)
-		if m.Concurrent {
-			m.mu.Unlock()
-		}
-	}
-
-	changeCallback(oldName, newName)
-
-	return newName
+func (m *IDMap) setHeldLock(id discord.Snowflake, name string,
+	overwriteName, overwriteID bool) {
+	m.setNameHeldLock(id, name, overwriteName)
+	m.setIDHeldLock(id, name, overwriteID)
 }
 
-func (m *IDMap) Delete(id discord.Snowflake) {
-	name := m.Name(id)
+func (m *IDMap) setNameHeldLock(id discord.Snowflake, name string,
+	overwrite bool) {
 	if name == "" {
-		// no-op
-		return
+		panic("setNameHeldLock: tried to insert empty string as name")
 	}
-	if m.Concurrent {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-	}
-	delete(m.forward, id)
-	delete(m.backward, name)
 
+	if !overwrite && m.nameHeldRLock(id) != "" {
+		panic("setIDHeldLock: overwriting without overwrite flag set")
+	}
+
+	m.forward[id] = name
+}
+
+func (m *IDMap) setIDHeldLock(id discord.Snowflake, name string,
+	overwrite bool) {
+	if name == "" {
+		panic("setIDHeldLock: tried to insert empty string as name")
+
+	}
+
+	if !overwrite && m.snowflakeHeldRLock(name).Valid() {
+		panic("setIDHeldLock: overwriting without overwrite flag set")
+	}
+
+	m.backward[name] = id
+}
+
+// Insert returns an IRC name for a given Discord ID.
+// It returns the previous value and the new value.
+//
+// It returns ideal if there were no collisions.
+// It panics if passed an invalid ID.
+// Passing an empty string for ideal is allowed, however.
+func (m *IDMap) Insert(
+	id discord.Snowflake, ideal string) (pre, post string) {
+	oldName := m.Name(id)
+
+	if oldName != "" {
+		split := strings.SplitN(oldName, "#", 2)
+		if split[0] == ideal {
+			return oldName, oldName
+		}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	newName := m.getNewNameHeldRLock(id, ideal)
+
+	m.setNameHeldLock(id, newName, true)
+	m.setIDHeldLock(id, newName, false)
+	if oldName != "" {
+		m.deleteNameHeldLock(id, oldName, true)
+	}
+
+	if oldName != "" {
+	}
+
+	return oldName, newName
 }
 
 var hashReplacer = strings.NewReplacer("#", "")

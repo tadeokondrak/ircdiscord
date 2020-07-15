@@ -46,16 +46,17 @@ func (s *Session) harvestNick(guild, user discord.Snowflake, nick, username stri
 		panic("valid user id but empty username ")
 	}
 
-	s.nickMap(guild).InsertWithChangeCallback(user, sanitizeNick(nick),
-		func(pre, post string) {
-			ev := &UserNameChange{
-				GuildID: guild,
-				ID:      user,
-				Old:     pre,
-				New:     post,
-			}
-			s.SessionHandler.Call(ev)
-		})
+	pre, post := s.nickMap(guild).Insert(user, sanitizeNick(nick))
+	if pre != post {
+		ev := &UserNameChange{
+			GuildID: guild,
+			ID:      user,
+			Old:     pre,
+			New:     post,
+		}
+		s.SessionHandler.Call(ev)
+
+	}
 }
 
 func (s *Session) harvestUser(user *discord.User) {

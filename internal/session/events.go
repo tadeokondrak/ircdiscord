@@ -5,8 +5,8 @@ import "github.com/diamondburned/arikawa/discord"
 type UserNameChange struct {
 	GuildID discord.Snowflake
 	ID      discord.Snowflake
-	Old     string
-	New     string
+	Old     string // can be empty
+	New     string // can be empty
 }
 
 type ChannelNameChange struct {

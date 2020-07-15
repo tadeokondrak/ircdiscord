@@ -51,9 +51,9 @@ func NICK(w Writer, prefix *irc.Prefix, name string) error {
 	})
 }
 
-func JOIN(w Writer, channel string) error {
+func JOIN(w Writer, prefix *irc.Prefix, channel string) error {
 	return w.WriteMessage(&irc.Message{
-		Prefix:  w.ClientPrefix(),
+		Prefix:  prefix,
 		Command: "JOIN",
 		Params:  []string{channel},
 	})

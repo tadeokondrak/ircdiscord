@@ -154,7 +154,6 @@ func safeGetMap(maps map[discord.Snowflake]*idmap.IDMap,
 
 	mu.Lock()
 	maps[id] = idmap.New()
-	maps[id].Concurrent = true
 	mu.Unlock()
 	return maps[id]
 }
@@ -187,7 +186,8 @@ func (s *Session) plainUsername(userID discord.Snowflake) (string, error) {
 var ErrInvalidSnowflake = errors.New("invalid snowflake given")
 
 // UserName returns the IRC nickname for the given Discord user.
-func (s *Session) UserName(guild discord.Snowflake, id discord.Snowflake) (string, error) {
+func (s *Session) UserName(guild discord.Snowflake,
+	id discord.Snowflake) (string, error) {
 	if !id.Valid() {
 		return "", ErrInvalidSnowflake
 	}
@@ -226,7 +226,18 @@ func (s *Session) UserName(guild discord.Snowflake, id discord.Snowflake) (strin
 	}
 
 insert:
-	return nickMap.Insert(id, sanitizeNick(name)), nil
+	pre, post := nickMap.Insert(id, sanitizeNick(name))
+	if pre != post {
+		ev := &UserNameChange{
+			GuildID: guild,
+			ID:      id,
+			Old:     pre,
+			New:     post,
+		}
+		s.SessionHandler.Call(ev)
+	}
+
+	return post, nil
 }
 
 // UserFromName returns the Discord user for the given IRC nickname.
@@ -260,8 +271,9 @@ func (s *Session) ChannelName(guild discord.Snowflake,
 		return "", err
 	}
 
-	name := channelMap.Insert(channel.ID, channel.Name)
-	return fmt.Sprintf("#%s", name), nil
+	// TODO: send event when pre != post
+	_, post := channelMap.Insert(channel.ID, channel.Name)
+	return fmt.Sprintf("#%s", post), nil
 }
 
 // sanitizeNick removes characters invalid in an IRC nickname from a string.

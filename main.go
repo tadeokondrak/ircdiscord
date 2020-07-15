@@ -72,8 +72,10 @@ func main() {
 			port = 6667
 		}
 
+		addr := fmt.Sprintf(":%d", port)
+
 		var err error
-		listener, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
+		listener, err = net.Listen("tcp", addr)
 		if err != nil {
 			log.Fatalf("failed to create listener: %v", err)
 		}

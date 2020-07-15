@@ -102,8 +102,18 @@ func (c *Client) InChannel(channel string) bool {
 	return c.channels[channel]
 }
 
+func (c *Client) Channels() []string {
+	channels := []string{}
+	for channel, joined := range c.channels {
+		if joined {
+			channels = append(channels, channel)
+		}
+	}
+	return channels
+}
+
 func (c *Client) Join(channel, topic string, created time.Time) error {
-	if err := replies.JOIN(c, channel); err != nil {
+	if err := replies.JOIN(c, c.ClientPrefix(), channel); err != nil {
 		return err
 	}
 

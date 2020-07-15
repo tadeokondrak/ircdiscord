@@ -218,12 +218,23 @@ func (c *Client) handleSessionEvent(e gateway.Event) error {
 	switch e := e.(type) {
 	case *session.UserNameChange:
 		if e.GuildID == c.guild {
-			prefix := &irc.Prefix{
-				User: e.Old,
-				Name: e.Old,
-				Host: e.ID.String(),
+			if e.Old != "" {
+				prefix := &irc.Prefix{
+					User: e.Old,
+					Name: e.Old,
+					Host: e.ID.String(),
+				}
+				replies.NICK(c.ilayer, prefix, e.New)
+			} else {
+				prefix := &irc.Prefix{
+					User: e.New,
+					Name: e.New,
+					Host: e.ID.String(),
+				}
+				for _, channel := range c.ilayer.Channels() {
+					replies.JOIN(c.ilayer, prefix, channel)
+				}
 			}
-			replies.NICK(c.ilayer, prefix, e.New)
 		}
 	case *session.ChannelNameChange:
 	}

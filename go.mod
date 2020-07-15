@@ -3,7 +3,7 @@ module github.com/tadeokondrak/ircdiscord
 go 1.14
 
 require (
-	github.com/diamondburned/arikawa v0.10.5
+	github.com/diamondburned/arikawa v0.12.0
 	github.com/diamondburned/ningen v0.1.1-0.20200715034121-61de7138eb56
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.0.3

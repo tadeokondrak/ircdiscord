@@ -67,6 +67,38 @@ func (m *IDMap) DeleteSnowflake(id discord.Snowflake) bool {
 	return m.deleteHeldLock(id, name)
 }
 
+// Insert returns an IRC name for a given Discord ID.
+// It returns the previous value and the new value.
+//
+// It returns ideal if there were no collisions.
+// It panics if passed an invalid ID.
+// Passing an empty string for ideal is allowed, however.
+func (m *IDMap) Insert(
+	id discord.Snowflake, ideal string) (pre, post string) {
+	oldName := m.Name(id)
+
+	if oldName != "" {
+		split := strings.SplitN(oldName, "#", 2)
+		if split[0] == ideal {
+			return oldName, oldName
+		}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	newName := m.getNewNameHeldRLock(id, ideal)
+
+	m.setNameHeldLock(id, newName, true)
+	m.setIDHeldLock(id, newName, false)
+
+	if oldName != "" {
+		m.deleteNameHeldLock(id, oldName, true)
+	}
+
+	return oldName, newName
+}
+
 func (m *IDMap) nameHeldRLock(id discord.Snowflake) string {
 	if !id.Valid() {
 		panic("Name: invalid ID")
@@ -172,38 +204,6 @@ func (m *IDMap) setIDHeldLock(id discord.Snowflake, name string,
 	}
 
 	m.backward[name] = id
-}
-
-// Insert returns an IRC name for a given Discord ID.
-// It returns the previous value and the new value.
-//
-// It returns ideal if there were no collisions.
-// It panics if passed an invalid ID.
-// Passing an empty string for ideal is allowed, however.
-func (m *IDMap) Insert(
-	id discord.Snowflake, ideal string) (pre, post string) {
-	oldName := m.Name(id)
-
-	if oldName != "" {
-		split := strings.SplitN(oldName, "#", 2)
-		if split[0] == ideal {
-			return oldName, oldName
-		}
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	newName := m.getNewNameHeldRLock(id, ideal)
-
-	m.setNameHeldLock(id, newName, true)
-	m.setIDHeldLock(id, newName, false)
-
-	if oldName != "" {
-		m.deleteNameHeldLock(id, oldName, true)
-	}
-
-	return oldName, newName
 }
 
 var hashReplacer = strings.NewReplacer("#", "")

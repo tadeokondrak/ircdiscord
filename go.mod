@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/diamondburned/arikawa v0.12.1
-	github.com/diamondburned/ningen v0.1.1-0.20200715034121-61de7138eb56
+	github.com/diamondburned/ningen v0.1.1-0.20200715070608-a859f5faa03b
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.0.3
 	github.com/sourcegraph/annotate v0.0.0-20160123013949-f4cad6c6324d // indirect

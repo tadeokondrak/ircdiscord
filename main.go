@@ -20,10 +20,24 @@ var (
 )
 
 func runClient(conn net.Conn) {
-	c := client.New(conn, ircDebug, discordDebug)
-	defer c.Close()
-	if err := c.Run(); err != nil {
+	cl := client.New(conn, ircDebug, discordDebug)
+	defer cl.Close()
+
+	if err := cl.Run(); err != nil {
 		log.Println(err)
+	}
+}
+
+func runServer(ln net.Listener) {
+	defer ln.Close()
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Fatalf("failed to accept connection: %v", err)
+		}
+
+		go runClient(conn)
 	}
 }
 
@@ -41,52 +55,40 @@ func main() {
 
 	log.SetFlags(0)
 
-	var listener net.Listener
 	if tlsEnabled {
 		if certfile == "" || keyfile == "" {
-			log.Fatalf("certfile/keyfile required for tls")
+			log.Fatalf("certfile and keyfile are required for TLS")
 		}
 
-		var cert tls.Certificate
 		cert, err := tls.LoadX509KeyPair(certfile, keyfile)
 		if err != nil {
 			log.Fatalf("failed to load keypair: %v", err)
 		}
 
-		config := tls.Config{
-			Certificates: []tls.Certificate{cert},
-		}
+		config := &tls.Config{Certificates: []tls.Certificate{cert}}
 
 		if port == 0 {
 			port = 6697
 		}
-
 		addr := fmt.Sprintf(":%d", port)
 
-		listener, err = tls.Listen("tcp", addr, &config)
+		listener, err := tls.Listen("tcp", addr, config)
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}
+
+		runServer(listener)
 	} else {
 		if port == 0 {
 			port = 6667
 		}
-
 		addr := fmt.Sprintf(":%d", port)
 
-		var err error
-		listener, err = net.Listen("tcp", addr)
+		listener, err := net.Listen("tcp", addr)
 		if err != nil {
 			log.Fatalf("failed to create listener: %v", err)
 		}
-	}
-	defer listener.Close()
 
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Fatalf("failed to accept connection: %v", err)
-		}
-		go runClient(conn)
+		runServer(listener)
 	}
 }

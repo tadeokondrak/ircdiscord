@@ -18,7 +18,9 @@ func TestMangle(t *testing.T) {
 	assert.Equal(t, mangle("name#12345##", 12345), "name#12345###")
 }
 
-func testIDMap(t *testing.T, m *IDMap) {
+func TestIDMap(t *testing.T) {
+	m := New()
+
 	var oldname, newname string
 	assert.Equal(t, m.Name(discord.Snowflake(12345)), "")
 
@@ -61,11 +63,4 @@ func testIDMap(t *testing.T, m *IDMap) {
 	assert.Equal(t, newname, "newname")
 	assert.False(t, m.Snowflake("name#12").Valid())
 	assert.True(t, m.Snowflake("newname").Valid())
-}
-
-func TestIDMap(t *testing.T) {
-	m := New()
-	testIDMap(t, m)
-	m = New()
-	testIDMap(t, m)
 }

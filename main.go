@@ -86,7 +86,7 @@ func main() {
 
 		listener, err := net.Listen("tcp", addr)
 		if err != nil {
-			log.Fatalf("failed to create listener: %v", err)
+			log.Fatalf("failed to listen: %v", err)
 		}
 
 		runServer(listener)

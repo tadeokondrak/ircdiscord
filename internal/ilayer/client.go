@@ -90,10 +90,6 @@ func (c *Client) Password() string {
 	return c.password
 }
 
-func (c *Client) SetPassword(password string) error {
-	panic("todo")
-}
-
 func (c *Client) IsRegistered() bool {
 	return c.isRegistered
 }

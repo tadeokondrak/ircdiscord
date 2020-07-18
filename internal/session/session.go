@@ -12,7 +12,6 @@ import (
 	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/handler"
 	"github.com/diamondburned/arikawa/state"
-	"github.com/diamondburned/arikawa/utils/httputil/httpdriver"
 	"github.com/diamondburned/ningen"
 	"github.com/tadeokondrak/ircdiscord/internal/idmap"
 )
@@ -21,6 +20,7 @@ import (
 // Discord user.
 type Session struct {
 	*ningen.State
+	removeFunc       RemoveFunc
 	internalHandler  *handler.Handler
 	userMap          map[discord.Snowflake]string
 	userMapMutex     sync.RWMutex
@@ -32,58 +32,24 @@ type Session struct {
 	refs             uint32
 }
 
-var (
-	ids         = make(map[string]discord.Snowflake)
-	sessions    = make(map[discord.Snowflake]*Session)
-	sessionLock sync.Mutex
-)
+// RemoveFunc is a function type used to remove a Session from some storage
+// when Close is called.
+type RemoveFunc func(s *Session)
 
-func (s *Session) Messages(
-	channelID discord.Snowflake) ([]discord.Message, error) {
-	messages, err := s.State.Messages(channelID)
-	if err == nil {
-		s.harvestMessages(messages)
-	}
-	return messages, err
-}
-
-// Get returns the Session for a given token, connecting to Discord if
-// it does not already exist. If the session does not already exist, and
-// debug is true, the newly created session will log information to stderr.
-func Get(token string, enableDebug bool) (*Session, error) {
-	sessionLock.Lock()
-	defer sessionLock.Unlock()
-
-	if id, ok := ids[token]; ok {
-		if s, ok := sessions[id]; ok {
-			s.Ref()
-			return s, nil
-		}
-	}
-
-	plainstate, err := state.New(token)
+// New creates a new Session.
+// removeFunc is a function that will called on Close.
+func New(token string, debug bool, removeFunc RemoveFunc) (*Session, error) {
+	plain, err := state.New(token)
 	if err != nil {
 		return nil, err
 	}
 
-	state, err := ningen.FromState(plainstate)
+	state, err := ningen.FromState(plain)
 	if err != nil {
 		return nil, err
 	}
 
-	if enableDebug {
-		state.AddHandler(func(e interface{}) {
-			fmt.Printf("<-d %T\n", e)
-		})
-		state.OnRequest = append(state.OnRequest,
-			func(r httpdriver.Request) error {
-				fmt.Printf("->d %s\n", r.GetPath())
-				return nil
-			},
-		)
-	}
-
-	session := &Session{
+	s := &Session{
 		State:           state,
 		internalHandler: handler.New(),
 		userMap:         make(map[discord.Snowflake]string),
@@ -91,7 +57,8 @@ func Get(token string, enableDebug bool) (*Session, error) {
 		channelMaps:     make(map[discord.Snowflake]*idmap.IDMap),
 		refs:            0,
 	}
-	state.AddHandler(session.onEventHarvest)
+
+	state.AddHandler(s.onEventHarvest)
 
 	if err := state.Open(); err != nil {
 		return nil, err
@@ -102,34 +69,46 @@ func Get(token string, enableDebug bool) (*Session, error) {
 		return nil, err
 	}
 
-	session.id = me.ID
-	ids[token] = session.id
-	sessions[session.id] = session
+	s.id = me.ID
 
-	return session, nil
+	return s, nil
 }
 
-// Ref increases the reference count.
+// Ref increments the reference count.
 func (s *Session) Ref() {
 	atomic.AddUint32(&s.refs, 1)
 }
 
-// Unref decreases the reference count, making the Session invalid if it's
-// the last.
+// Unref decrements the reference count, calling Close if it hits zero.
 func (s *Session) Unref() error {
 	if atomic.AddUint32(&s.refs, ^uint32(0)) == 0 {
-		sessionLock.Lock()
-		defer sessionLock.Unlock()
-		delete(sessions, s.Ready.User.ID)
 		return s.Close()
 	}
 	return nil
 }
 
-// Close closes the Discord connection. This should generally not be called,
-// since Unref closes the connection on last disconnect.
+// Close calls the remove function given in New then closes the Discord
+// connection.
 func (s *Session) Close() error {
+	s.removeFunc(s)
 	return s.State.Close()
+}
+
+// Run does nothing for now.
+func (s *Session) Run() error {
+	return nil
+}
+
+// Messages overrides (*ningen.State).Messages.
+// It is a temporary hack to process the users and members in a message before
+// posting it, to avoid messages being sent before joins.
+func (s *Session) Messages(
+	channelID discord.Snowflake) ([]discord.Message, error) {
+	messages, err := s.State.Messages(channelID)
+	if err == nil {
+		s.harvestMessages(messages)
+	}
+	return messages, err
 }
 
 func safeGetMap(maps map[discord.Snowflake]*idmap.IDMap,

@@ -101,9 +101,7 @@ func (s *Server) session(token string, debug bool) (*session.Session, error) {
 		}
 	}
 
-	remove := func(s *session.Session) {}
-
-	sess, err := session.New(token, debug, session.RemoveFunc(remove))
+	sess, err := session.New(token, debug, s.removeSession)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create session")
 	}

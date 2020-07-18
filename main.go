@@ -79,7 +79,11 @@ func main() {
 	flag.StringVar(&keyfile, "key", "", "tls key file")
 	flag.Parse()
 
-	log.SetFlags(0)
+	if !debug {
+		log.SetFlags(0)
+	} else {
+		log.SetFlags(log.Lshortfile)
+	}
 
 	var ln net.Listener
 	if !tlsEnabled {
@@ -96,10 +100,7 @@ func main() {
 		}
 	}
 
-	server := server.New(ln)
-	server.Debug = debug
-	server.IRCDebug = ircDebug
-	server.DiscordDebug = discordDebug
+	server := server.New(ln, debug, ircDebug, discordDebug)
 	defer server.Close()
 
 	errors := make(chan error)
@@ -119,6 +120,6 @@ func main() {
 	case err := <-errors:
 		log.Println(err)
 	case sig := <-sigch:
-		log.Printf("received signal '%v', exiting", sig)
+		log.Printf("received signal '%v'", sig)
 	}
 }

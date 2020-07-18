@@ -3,6 +3,7 @@ package server
 import (
 	"log"
 	"net"
+
 	"sync"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -13,10 +14,10 @@ import (
 
 // Server is state shared across all connections.
 type Server struct {
-	listener     net.Listener // never changes
-	Debug        bool
-	IRCDebug     bool
-	DiscordDebug bool
+	listener     net.Listener
+	debug        bool
+	ircDebug     bool
+	discordDebug bool
 
 	mu       sync.Mutex                             // guards next 3 fields
 	ids      map[string]discord.Snowflake           // tokens to IDs
@@ -25,22 +26,33 @@ type Server struct {
 }
 
 // New creates a new Server, taking ownership of the listener.
-func New(listener net.Listener) *Server {
+func New(listener net.Listener, debug, ircDebug, discordDebug bool) *Server {
+	if debug {
+		log.Printf("creating server %v", listener.Addr())
+	}
+
 	return &Server{
-		listener: listener,
-		ids:      make(map[string]discord.Snowflake),
-		sessions: make(map[discord.Snowflake]*session.Session),
+		debug:        debug,
+		ircDebug:     ircDebug,
+		discordDebug: discordDebug,
+		listener:     listener,
+		ids:          make(map[string]discord.Snowflake),
+		sessions:     make(map[discord.Snowflake]*session.Session),
 	}
 }
 
 // Close closes the server's listener, which causes the current Run invocation
 // to unblock and return an error.
 func (s *Server) Close() error {
+	if s.debug {
+		log.Printf("destroying server %v", s.listener.Addr())
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for _, client := range s.clients {
-		client.Close()
+	for _, cl := range s.clients {
+		s.removeClientLock(cl)
 	}
 
 	return s.listener.Close()
@@ -65,7 +77,7 @@ func (s *Server) Run() error {
 	for {
 		select {
 		case conn := <-conns:
-			go s.runClient(conn, s.IRCDebug, s.DiscordDebug)
+			go s.runClient(conn)
 		case err := <-errs:
 			return err
 		}
@@ -74,32 +86,75 @@ func (s *Server) Run() error {
 
 // runClient runs a client.Client on the given connection, with the debug
 // settings given in its arguments.
-//
-// The debug arguments are given explicitly rather than taken from the shared
-// Server state, because they are not guarded by the mutex.
-func (s *Server) runClient(conn net.Conn, ircDebug, discordDebug bool) {
-	cl := client.New(conn, s.session, ircDebug, discordDebug)
-	defer cl.Close()
+func (s *Server) runClient(conn net.Conn) {
+	cl := client.New(conn, s.session, s.debug, s.ircDebug, s.discordDebug)
+	s.mu.Lock()
+	s.clients = append(s.clients, cl)
+	s.mu.Unlock()
+	defer s.removeClient(cl)
 
 	if err := cl.Run(); err != nil {
-		log.Println(err)
+		log.Printf("client %v disconnected with error: %v",
+			conn.RemoteAddr(), err)
 	}
+}
+
+// removeClient is the lock-acquiring version of removeClientLock.
+func (s *Server) removeClient(cl *client.Client) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.removeClientLock(cl)
+}
+
+// removeClientLock attempts to find a client in the list of clients,
+// and removes it. It is a no-op if the client is not in the list.
+// The caller must hold s.mu.
+func (s *Server) removeClientLock(cl *client.Client) error {
+	for i, other := range s.clients {
+		if cl == other {
+			// remove
+			s.clients[i] = s.clients[len(s.clients)-1]
+			s.clients[len(s.clients)-1] = nil
+			s.clients = s.clients[:len(s.clients)-1]
+
+			s.mu.Unlock()
+			err := cl.Close()
+			s.mu.Lock()
+			return err
+		}
+	}
+
+	return nil
 }
 
 // session returns the session.Session for the given token.
 // It may be called concurrently from multiple goroutines.
-//
-// If debug is true and the session does not already exist, the returned
-// session will log communication to the standard Logger.
 func (s *Server) session(token string, debug bool) (*session.Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.debug {
+		log.Printf("requested session for token %s", token)
+	}
+
 	if id, ok := s.ids[token]; ok {
+		if s.debug {
+			log.Printf("found id %v for token %s", id, token)
+		}
+
 		if sess, ok := s.sessions[id]; ok {
+			if s.debug {
+				log.Printf("found session %p for token %s",
+					sess, token)
+			}
+
 			sess.Ref()
 			return sess, nil
 		}
+	}
+
+	if s.debug {
+		log.Printf("no session for token %s found, creating one", token)
 	}
 
 	sess, err := session.New(token, debug, s.removeSession)
@@ -116,6 +171,12 @@ func (s *Server) session(token string, debug bool) (*session.Session, error) {
 
 	for otherID, other := range s.sessions {
 		if me.ID == otherID {
+			if s.debug {
+				log.Printf("different token was used to log " +
+					"into existing session, " +
+					"closing new session")
+			}
+
 			sess.Close()
 			return other, nil
 		}
@@ -132,6 +193,11 @@ func (s *Server) session(token string, debug bool) (*session.Session, error) {
 func (s *Server) removeSession(sess *session.Session) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.debug {
+		log.Printf("removing session %p from server %v",
+			sess, s.listener.Addr())
+	}
 
 	for id, other := range s.sessions {
 		if sess == other {

@@ -51,6 +51,7 @@ func New(token string, debug bool, removeFunc RemoveFunc) (*Session, error) {
 
 	s := &Session{
 		State:           state,
+		removeFunc:      removeFunc,
 		internalHandler: handler.New(),
 		userMap:         make(map[discord.Snowflake]string),
 		nickMaps:        make(map[discord.Snowflake]*idmap.IDMap),

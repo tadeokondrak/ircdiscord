@@ -1,8 +1,10 @@
 package client
 
 import (
+	"io"
 	"log"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/diamondburned/arikawa/discord"
@@ -23,13 +25,16 @@ type Client struct {
 	guild         discord.Snowflake // invalid for DM server and pre-login
 	lastMessageID discord.Snowflake // used to prevent duplicate messages
 	capabilities  map[string]bool   // ircv3 capabilities
-	discordDebug  bool              // whether to log Discord interaction
-	errors        chan error        // send errors here from goroutines
+	debug         bool
+	discordDebug  bool       // whether to log Discord interaction
+	errors        chan error // send errors here from goroutines
 	cancels       []func()
 }
 
 func New(conn net.Conn, sessionFunc SessionFunc,
-	ircDebug, discordDebug bool) *Client {
+	debug, ircDebug, discordDebug bool) *Client {
+	log.Printf("creating client %v", conn.RemoteAddr())
+
 	ircconn := irc.NewConn(conn)
 	client := ilayer.NewClient(ircconn,
 		conn.LocalAddr().String(), conn.RemoteAddr().String())
@@ -40,6 +45,7 @@ func New(conn net.Conn, sessionFunc SessionFunc,
 		ircconn:      ircconn,
 		ilayer:       client,
 		capabilities: make(map[string]bool),
+		debug:        debug,
 		discordDebug: discordDebug,
 		errors:       make(chan error),
 	}
@@ -60,12 +66,16 @@ func New(conn net.Conn, sessionFunc SessionFunc,
 }
 
 func (c *Client) Close() error {
-	if c.session != nil {
-		c.session.Unref()
+	if c.debug {
+		log.Printf("closing client %v", c.netconn.RemoteAddr())
 	}
 
 	for _, cancel := range c.cancels {
 		cancel()
+	}
+
+	if c.session != nil {
+		c.session.Unref()
 	}
 
 	return c.netconn.Close()
@@ -75,22 +85,26 @@ func (c *Client) isGuild() bool {
 	return c.guild.Valid()
 }
 
-func (c *Client) Run() error {
-	log.Printf("connected: %v", c.ilayer.ClientPrefix().Name)
-	defer log.Printf("disconnected: %v", c.ilayer.ClientPrefix().Name)
+const errClosingStr = "use of closed network connection"
 
-	msgs := make(chan *irc.Message)
-
-	go func() {
-		for {
-			msg, err := c.ilayer.ReadMessage()
-			if err != nil {
-				c.errors <- err
-				return
+func (c *Client) ircReadLoop(msgs chan<- *irc.Message) {
+	for {
+		msg, err := c.ilayer.ReadMessage()
+		if err != nil {
+			if err == io.EOF ||
+				strings.Contains(err.Error(), errClosingStr) {
+				err = nil
 			}
-			msgs <- msg
+			c.errors <- err
+			return
 		}
-	}()
+		msgs <- msg
+	}
+}
+
+func (c *Client) Run() error {
+	msgs := make(chan *irc.Message)
+	go c.ircReadLoop(msgs)
 
 	for !c.ilayer.IsRegistered() {
 		select {

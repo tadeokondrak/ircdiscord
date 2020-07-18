@@ -113,6 +113,6 @@ func main() {
 	case err := <-errors:
 		log.Println(err)
 	case sig := <-sigch:
-		log.Printf("received signal %v, exiting", sig)
+		log.Printf("received signal '%v', exiting", sig)
 	}
 }

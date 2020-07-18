@@ -11,9 +11,10 @@ import (
 	"github.com/tadeokondrak/ircdiscord/internal/session"
 )
 
-// Server is the collection of state shared across all connections.
+// Server is state shared across all connections.
 type Server struct {
-	listener     net.Listener // never changes after construction
+	listener     net.Listener // never changes
+	Debug        bool
 	IRCDebug     bool
 	DiscordDebug bool
 

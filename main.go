@@ -57,21 +57,24 @@ func listenTLS(port int, certfile, keyfile string) (net.Listener, error) {
 
 func main() {
 	var (
+		debug        bool
 		ircDebug     bool
 		discordDebug bool
-		tlsEnabled   bool
 		port         int
+		tlsEnabled   bool
 		certfile     string
 		keyfile      string
 	)
 
+	flag.BoolVar(&debug, "debug", false,
+		"enable verbose logging")
 	flag.BoolVar(&ircDebug, "ircdebug", false,
-		"enable logging of irc communication")
+		"enable verbose logging of irc communication")
 	flag.BoolVar(&discordDebug, "discorddebug", false,
-		"enable logging of discord communication")
-	flag.BoolVar(&tlsEnabled, "tls", false, "enable tls encryption")
+		"enable verbose logging of discord communication")
 	flag.IntVar(&port, "port", 0,
 		"port to run on, defaults to 6667/6697 depending on tls")
+	flag.BoolVar(&tlsEnabled, "tls", false, "enable tls encryption")
 	flag.StringVar(&certfile, "cert", "", "tls certificate file")
 	flag.StringVar(&keyfile, "key", "", "tls key file")
 	flag.Parse()
@@ -94,6 +97,9 @@ func main() {
 	}
 
 	server := server.New(ln)
+	server.Debug = debug
+	server.IRCDebug = ircDebug
+	server.DiscordDebug = discordDebug
 	defer server.Close()
 
 	errors := make(chan error)

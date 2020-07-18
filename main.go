@@ -104,6 +104,8 @@ func main() {
 		}
 	}()
 
+	log.Printf("listening on %v", ln.Addr())
+
 	sigch := make(chan os.Signal, 1)
 	signal.Notify(sigch, os.Interrupt)
 

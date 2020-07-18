@@ -12,7 +12,10 @@ import (
 	"gopkg.in/irc.v3"
 )
 
+type SessionFunc func(token string, debug bool) (*session.Session, error)
+
 type Client struct {
+	sessionFunc   SessionFunc
 	netconn       net.Conn
 	ircconn       *irc.Conn
 	ilayer        *ilayer.Client
@@ -25,12 +28,14 @@ type Client struct {
 	cancels       []func()
 }
 
-func New(conn net.Conn, ircDebug, discordDebug bool) *Client {
+func New(conn net.Conn, sessionFunc SessionFunc,
+	ircDebug, discordDebug bool) *Client {
 	ircconn := irc.NewConn(conn)
 	client := ilayer.NewClient(ircconn,
 		conn.LocalAddr().String(), conn.RemoteAddr().String())
 
 	c := &Client{
+		sessionFunc:  sessionFunc,
 		netconn:      conn,
 		ircconn:      ircconn,
 		ilayer:       client,

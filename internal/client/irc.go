@@ -78,7 +78,7 @@ func (c *Client) HandlePassword(password string) (string, error) {
 	}
 
 	args := strings.SplitN(password, ":", 2)
-	session, err := session.Get(args[0], c.discordDebug)
+	session, err := c.sessionFunc(args[0], c.discordDebug)
 	if err != nil {
 		return "", err
 	}

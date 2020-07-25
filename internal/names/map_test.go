@@ -80,7 +80,9 @@ func TestMap_NickName(t *testing.T) {
 		m := NewMap()
 
 		assert.PanicsWithValue(t, "NickName: invalid guildID", func() {
-			m.NickName(discord.GuildID(discord.NullSnowflake), discord.UserID(1))
+			m.NickName(
+				discord.GuildID(discord.NullSnowflake),
+				discord.UserID(1))
 		})
 	})
 
@@ -179,7 +181,9 @@ func TestMap_ChannelName(t *testing.T) {
 		m := NewMap()
 
 		assert.PanicsWithValue(t, "ChannelName: invalid guildID", func() {
-			m.ChannelName(discord.GuildID(discord.NullSnowflake), discord.ChannelID(1))
+			m.ChannelName(
+				discord.GuildID(discord.NullSnowflake),
+				discord.ChannelID(1))
 		})
 	})
 

@@ -16,12 +16,21 @@ type Writer interface {
 	WriteMessage(*irc.Message) error
 }
 
-func CAP_LS(w Writer, supported []string) error {
+func CAP_LS(w Writer, supported map[string]string) error {
+	var params []string
+	for name, value := range supported {
+		param := name
+		if value != "" {
+			param += "=" + value
+		}
+		params = append(params, param)
+	}
+
 	return w.WriteMessage(&irc.Message{
 		Prefix:  w.ServerPrefix(),
 		Command: "CAP",
 		Params: []string{w.ClientPrefix().Name, "LS",
-			strings.Join(supported, " ")},
+			strings.Join(params, " ")},
 	})
 }
 
@@ -59,12 +68,24 @@ func JOIN(w Writer, prefix *irc.Prefix, channel string) error {
 	})
 }
 
-func PRIVMSG(w Writer, t time.Time, prefix *irc.Prefix, channel, message string) error {
+func PRIVMSG(w Writer,
+	t time.Time, prefix *irc.Prefix,
+	channel, message, id, batch string) error {
+
 	tags := make(irc.Tags)
 	if w.HasCapability("server-time") && !t.IsZero() {
 		tags["time"] =
 			irc.TagValue(t.UTC().Format("2006-01-02T15:04:05.000Z"))
 	}
+
+	if w.HasCapability("message-tags") && id != "" {
+		tags["msgid"] = irc.TagValue(id)
+	}
+
+	if w.HasCapability("batch") && batch != "" {
+		tags["batch"] = irc.TagValue(batch)
+	}
+
 	return w.WriteMessage(&irc.Message{
 		Tags:    tags,
 		Prefix:  prefix,
@@ -129,7 +150,7 @@ func RPL_TOPIC(w Writer, channel, topic string) error {
 func RPL_NOTOPIC(w Writer, channel string) error {
 	return w.WriteMessage(&irc.Message{
 		Prefix:  w.ServerPrefix(),
-		Command: irc.RPL_TOPIC,
+		Command: irc.RPL_NOTOPIC,
 		Params: []string{w.ClientPrefix().Name, channel,
 			"No topic is set"},
 	})
@@ -269,5 +290,69 @@ func RPL_ENDOFNAMES(w Writer, channel string) error {
 		Prefix:  w.ServerPrefix(),
 		Command: irc.RPL_ENDOFNAMES,
 		Params:  []string{w.ClientPrefix().Name, channel, "End of /NAMES list"},
+	})
+}
+
+func AUTHENTICATE(w Writer, param string) error {
+	return w.WriteMessage(&irc.Message{
+		Command: "AUTHENTICATE",
+		Params:  []string{param},
+	})
+}
+
+func RPL_LOGGEDIN(w Writer, account, user string) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_LOGGEDIN,
+		Params: []string{w.ClientPrefix().Name,
+			w.ClientPrefix().String(), account,
+			fmt.Sprintf("You are now logged in as %s", user)},
+	})
+}
+
+func RPL_SASLSUCCESS(w Writer) error {
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: irc.RPL_SASLSUCCESS,
+		Params: []string{w.ClientPrefix().Name,
+			"SASL authentication successful"},
+	})
+}
+
+func BATCH(w Writer, name string, args ...string) error {
+	var params []string
+	if len(args) == 0 {
+		params = append(params, "-"+name)
+	} else {
+		params = append(params, "+"+name)
+	}
+	params = append(params, args...)
+
+	return w.WriteMessage(&irc.Message{
+		Prefix:  w.ServerPrefix(),
+		Command: "BATCH",
+		Params:  params,
+	})
+}
+
+func TAGMSGTyping(w Writer, t time.Time, prefix *irc.Prefix, channel string) error {
+	if !w.HasCapability("message-tags") {
+		return nil
+	}
+
+	tags := irc.Tags{
+		"+typing": "active",
+	}
+
+	if w.HasCapability("server-time") && !t.IsZero() {
+		tags["time"] =
+			irc.TagValue(t.UTC().Format("2006-01-02T15:04:05.000Z"))
+	}
+
+	return w.WriteMessage(&irc.Message{
+		Tags:    tags,
+		Prefix:  prefix,
+		Command: "TAGMSG",
+		Params:  []string{channel},
 	})
 }

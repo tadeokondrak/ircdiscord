@@ -1,34 +1,35 @@
 package client
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/diamondburned/arikawa/discord"
 	"github.com/tadeokondrak/ircdiscord/internal/ilayer"
-	"github.com/tadeokondrak/ircdiscord/internal/replies"
 	"github.com/tadeokondrak/ircdiscord/internal/session"
 	"gopkg.in/irc.v3"
 )
 
+const errClosingStr = "use of closed network connection"
+
 type SessionFunc func(token string, debug bool) (*session.Session, error)
 
 type Client struct {
-	sessionFunc   SessionFunc
-	netconn       net.Conn
-	ircconn       *irc.Conn
-	ilayer        *ilayer.Client
-	session       *session.Session  // nil pre-login
-	guild         discord.Snowflake // invalid for DM server and pre-login
-	lastMessageID discord.Snowflake // used to prevent duplicate messages
-	capabilities  map[string]bool   // ircv3 capabilities
-	debug         bool
-	discordDebug  bool       // whether to log Discord interaction
-	errors        chan error // send errors here from goroutines
-	cancels       []func()
+	sessionFunc  SessionFunc
+	netconn      net.Conn
+	ircconn      *irc.Conn
+	ilayer       *ilayer.Client
+	session      *session.Session // nil pre-login
+	guild        session.Guild    // invalid for DM server and pre-login
+	debug        bool
+	ircDebug     bool
+	discordDebug bool
+	errors       chan error // send errors here from goroutines
 }
 
 func New(conn net.Conn, sessionFunc SessionFunc,
@@ -44,8 +45,8 @@ func New(conn net.Conn, sessionFunc SessionFunc,
 		netconn:      conn,
 		ircconn:      ircconn,
 		ilayer:       client,
-		capabilities: make(map[string]bool),
 		debug:        debug,
+		ircDebug:     ircDebug,
 		discordDebug: discordDebug,
 		errors:       make(chan error),
 	}
@@ -66,12 +67,8 @@ func New(conn net.Conn, sessionFunc SessionFunc,
 }
 
 func (c *Client) Close() error {
-	if c.debug {
+	if c.ircDebug {
 		log.Printf("closing client %v", c.netconn.RemoteAddr())
-	}
-
-	for _, cancel := range c.cancels {
-		cancel()
 	}
 
 	if c.session != nil {
@@ -81,19 +78,15 @@ func (c *Client) Close() error {
 	return c.netconn.Close()
 }
 
-func (c *Client) isGuild() bool {
-	return c.guild.Valid()
-}
-
-const errClosingStr = "use of closed network connection"
-
 func (c *Client) ircReadLoop(msgs chan<- *irc.Message) {
 	for {
 		msg, err := c.ilayer.ReadMessage()
 		if err != nil {
-			if err == io.EOF ||
-				strings.Contains(err.Error(), errClosingStr) {
-				err = nil
+			if errors.Is(err, irc.ErrZeroLengthMessage) {
+				continue
+			}
+			if strings.Contains(err.Error(), errClosingStr) {
+				err = io.EOF
 			}
 			c.errors <- err
 			return
@@ -117,15 +110,9 @@ func (c *Client) Run() error {
 		}
 	}
 
-	events, cancel := c.session.ChanFor(
-		func(interface{}) bool { return true })
-	defer cancel()
-
-	listCancel := c.session.SubscribeUserList(c.guild,
-		func(e *session.UserNameChange) {
-			c.handleUsernameChange(e, "")
-		})
-	defer listCancel()
+	events := make(chan interface{})
+	c.session.Register(events, c.guild)
+	defer c.session.Unregister(events)
 
 	for {
 		select {
@@ -134,7 +121,7 @@ func (c *Client) Run() error {
 				return err
 			}
 		case event := <-events:
-			if err := c.handleDiscordEvent(event); err != nil {
+			if err := c.handleSessionEvent(event); err != nil {
 				return err
 			}
 		case err := <-c.errors:
@@ -143,70 +130,46 @@ func (c *Client) Run() error {
 	}
 }
 
-func (c *Client) channelIsVisible(channel *discord.Channel) (bool, error) {
-	me, err := c.session.Me()
-	if err != nil {
-		return false, err
+func (c *Client) handleSessionEvent(ev interface{}) error {
+	switch ev := ev.(type) {
+	case *session.MessageEvent:
+		return c.ilayer.Message(c.msgEventToMessage(ev))
+	case *session.TypingEvent:
+		prefix := &irc.Prefix{
+			Name: ev.User.Nickname,
+			User: ev.User.Username,
+			Host: ev.User.ID,
+		}
+		channelName := fmt.Sprintf("#%s", ev.Channel)
+		return c.ilayer.Typing(ev.Date, prefix, channelName)
+	case *session.ChannelHistoryEvent:
+		// TODO
+		return nil
+	case *session.UserUpdateEvent:
+		return nil
+	default:
+		return nil
 	}
-
-	if channel.Type != discord.GuildText {
-		return false, nil
-	}
-
-	perms, err := c.session.Permissions(channel.ID, me.ID)
-	if err != nil {
-		return false, err
-	}
-
-	return perms.Has(discord.PermissionViewChannel), nil
 }
 
-func (c *Client) seedState() error {
-	if c.isGuild() {
-		channels, err := c.session.Channels(c.guild)
-		if err != nil {
-			return err
-		}
-
-		for _, channel := range channels {
-			if channel.Type != discord.GuildText {
-				continue
-			}
-			_, err := c.session.ChannelName(c.guild, channel.ID)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		channels, err := c.session.PrivateChannels()
-		if err != nil {
-			return err
-		}
-
-		for _, channel := range channels {
-			if channel.Type != discord.DirectMessage {
-				continue
-			}
-			recip := channel.DMRecipients[0]
-			c.session.UserName(c.guild, recip.ID)
-		}
+func (c *Client) msgEventToMessage(ev *session.MessageEvent) *ilayer.Message {
+	prefix := &irc.Prefix{
+		Name: ev.User.Nickname,
+		User: ev.User.Username,
+		Host: ev.User.ID,
 	}
-
-	return nil
+	channelName := fmt.Sprintf("#%s", ev.Channel)
+	return &ilayer.Message{
+		Channel: channelName,
+		Content: ev.Content,
+		ID:      ev.ID,
+		Author:  prefix,
+		Date:    ev.Date,
+	}
 }
 
 func (c *Client) NetworkName() (string, error) {
-	guildName := "Discord"
-
-	if c.isGuild() {
-		guild, err := c.session.Guild(c.guild)
-		if err != nil {
-			return "", err
-		}
-		guildName = guild.Name
-	}
-
-	return guildName, nil
+	return c.session.GuildName(c.guild)
 }
 
 func (c *Client) ServerName() (string, error) {
@@ -218,45 +181,146 @@ func (c *Client) ServerVersion() (string, error) {
 }
 
 func (c *Client) ServerCreated() (time.Time, error) {
-	me, err := c.session.Me()
-	if err != nil {
-		return time.Time{}, err
-	}
-
-	guildID := me.ID
-	if c.isGuild() {
-		guildID = c.guild
-	}
-
-	return guildID.Time(), nil
+	return c.session.GuildDate(c.guild)
 }
 
 func (c *Client) MOTD() ([]string, error) {
-	return []string{}, nil
+	var motd []string
+	return motd, nil
 }
 
-// This function is called from multiple goroutines.
-func (c *Client) handleUsernameChange(e *session.UserNameChange,
-	channel string) {
-	if e.GuildID == c.guild && c.isGuild() {
-		if e.Old != "" {
-			if channel == "" {
-				prefix := &irc.Prefix{
-					User: e.Old,
-					Name: e.Old,
-					Host: e.ID.String(),
-				}
-				replies.NICK(c.ilayer, prefix, e.New)
-			}
-		} else {
-			prefix := &irc.Prefix{
-				User: e.New,
-				Name: e.New,
-				Host: e.ID.String(),
-			}
-			if channel != "" {
-				replies.JOIN(c.ilayer, prefix, channel)
-			}
-		}
+func (c *Client) HandleRegister() error {
+	password := c.ilayer.Password()
+	if password == "" {
+		password = c.ilayer.SASLPassword()
 	}
+	if password == "" {
+		return fmt.Errorf("no password provided")
+	}
+
+	args := strings.SplitN(password, ":", 2)
+	sess, err := c.sessionFunc(args[0], c.debug)
+	if err != nil {
+		return err
+	}
+
+	c.session = sess
+
+	if len(args) > 1 {
+		i, err := strconv.Atoi(args[1])
+		if err != nil {
+			return err
+		}
+
+		guildID := session.Guild(i)
+		if err := c.session.ValidateGuild(guildID); err != nil {
+			return err
+		}
+
+		c.guild = guildID
+	}
+
+	if c.ilayer.HasCapability("message-tags") && c.guild != 0 {
+		c.session.TypingSubscribe(c.guild)
+	}
+
+	c.ilayer.SetClientPrefix(&irc.Prefix{
+		Name: c.session.NickName(c.guild),
+		User: c.session.UserName(),
+		Host: fmt.Sprint(c.session.UserID()),
+	})
+
+	return nil
+}
+
+func (c *Client) HandleNickname(nickname string) (string, error) {
+	if !c.ilayer.IsRegistered() {
+		return nickname, nil
+	}
+
+	panic("TODO")
+}
+
+func (c *Client) HandleUsername(username string) (string, error) {
+	return username, nil
+}
+
+func (c *Client) HandleRealname(realname string) (string, error) {
+	return realname, nil
+}
+
+func (c *Client) HandlePassword(password string) (string, error) {
+	return password, nil
+}
+
+func (c *Client) HandlePing(nonce string) (string, error) {
+	return nonce, nil
+}
+
+func (c *Client) HandleJoin(channel string) (string, error) {
+	err := c.session.Channel(c.guild, channel)
+	return channel, err
+}
+
+func (c *Client) HandleTopic(channel string) (string, error) {
+	return c.session.ChannelTopic(c.guild, channel)
+}
+
+func (c *Client) HandleCreationTime(channel string) (time.Time, error) {
+	return time.Time{}, nil
+}
+
+func (c *Client) HandleNames(channel string) ([]string, error) {
+	return nil, nil
+}
+
+func (c *Client) HandleMessage(channel, content string) error {
+	return c.session.SendMessage(c.guild, channel, content)
+}
+
+func (c *Client) HandleList() ([]ilayer.ListEntry, error) {
+	entries := []ilayer.ListEntry{}
+	return entries, nil
+}
+
+func (c *Client) HandleWhois(username string) (ilayer.WhoisReply, error) {
+	panic("todo")
+}
+
+func (c *Client) HandleChatHistoryBefore(channel string, t time.Time,
+	limit int) ([]ilayer.Message, error) {
+	return nil, nil
+}
+
+func (c *Client) HandleChatHistoryAfter(channel string, t time.Time,
+	limit int) ([]ilayer.Message, error) {
+	return nil, nil
+}
+
+func (c *Client) HandleChatHistoryLatest(channel string, after time.Time,
+	limit int) ([]ilayer.Message, error) {
+	return nil, nil
+}
+
+func (c *Client) HandleChatHistoryAround(channel string, t time.Time,
+	limit int) ([]ilayer.Message, error) {
+	return nil, nil
+}
+
+func (c *Client) HandleChatHistoryBetween(channel string, after time.Time,
+	before time.Time, limit int) ([]ilayer.Message, error) {
+	return nil, nil
+}
+
+func (c *Client) HandleTypingActive(channel string) error {
+	c.session.Typing(c.guild, channel)
+	return nil
+}
+
+func (c *Client) HandleTypingPaused(channel string) error {
+	return nil
+}
+
+func (c *Client) HandleTypingDone(channel string) error {
+	return nil
 }

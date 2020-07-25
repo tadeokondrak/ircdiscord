@@ -8,10 +8,13 @@ import (
 	"gopkg.in/irc.v3"
 )
 
-var supportedCapabilities = []string{
-	"echo-message",
-	"server-time",
-	"message-tags",
+var supportedCapabilities = map[string]string{
+	"echo-message":      "",
+	"server-time":       "",
+	"message-tags":      "",
+	"sasl":              "PLAIN",
+	"batch":             "",
+	"draft/chathistory": "",
 }
 
 func (c *Client) handleCap(msg *irc.Message) error {
@@ -53,10 +56,8 @@ func (c *Client) handleCapList(msg *irc.Message) error {
 	}
 
 	enabledcaps := []string{}
-	for capability, enabled := range c.capabilities {
-		if enabled {
-			enabledcaps = append(enabledcaps, capability)
-		}
+	for capability := range c.capabilities {
+		enabledcaps = append(enabledcaps, capability)
 
 	}
 
@@ -72,7 +73,7 @@ func (c *Client) handleCapReq(msg *irc.Message) error {
 	for _, capability := range requested {
 		supported := false
 
-		for _, suppcap := range supportedCapabilities {
+		for suppcap, _ := range supportedCapabilities {
 			if capability == suppcap {
 				supported = true
 				break
@@ -85,7 +86,7 @@ func (c *Client) handleCapReq(msg *irc.Message) error {
 				capability)
 		}
 
-		c.capabilities[capability] = true
+		c.capabilities[capability] = struct{}{}
 	}
 
 	if err := replies.CAP_ACK(c, requested); err != nil {

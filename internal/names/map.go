@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/diamondburned/arikawa/discord"
 )
+
+// TODO: find places in this file that are more complex than they need to be
+// since thread-safety was removed
 
 // Map is a collection of mappings from IRC names to Discord IDs.
 //
@@ -16,7 +18,6 @@ import (
 //      - Nicknames to Discord users
 //      - Channnels to Discord channels
 type Map struct {
-	mu     sync.Mutex
 	userf  map[discord.UserID]string
 	userb  map[string]discord.UserID
 	nicksf map[discord.GuildID]map[discord.UserID]string
@@ -39,13 +40,7 @@ func NewMap() *Map {
 	}
 }
 
-// UserName returns the IRC name for userID.
-//
-// userID must be a valid snowflake.
-func (m *Map) UserName(userID discord.UserID) string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
+func (m *Map) userName(userID discord.UserID) string {
 	if !userID.Valid() {
 		panic("UserName: invalid userID")
 	}
@@ -53,13 +48,17 @@ func (m *Map) UserName(userID discord.UserID) string {
 	return m.userf[userID]
 }
 
+// UserName returns the IRC name for userID.
+//
+// userID must be a valid snowflake.
+func (m *Map) UserName(userID discord.UserID) string {
+	return m.userName(userID)
+}
+
 // UserID returns the Discord ID for name.
 //
 // name must not be empty.
 func (m *Map) UserID(name string) discord.UserID {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	if name == "" {
 		panic("UserID: invalid name")
 	}
@@ -67,14 +66,8 @@ func (m *Map) UserID(name string) discord.UserID {
 	return m.userb[name]
 }
 
-// NickName returns the IRC name for userID in guildID.
-//
-// guildID must be a valid snowflake or the zero snowflake.
-// userID must be a valid snowflake.
-func (m *Map) NickName(guildID discord.GuildID, userID discord.UserID) string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
+func (m *Map) nickName(guildID discord.GuildID,
+	userID discord.UserID) string {
 	if !guildID.Valid() && guildID != 0 {
 		panic("NickName: invalid guildID")
 	}
@@ -91,14 +84,27 @@ func (m *Map) NickName(guildID discord.GuildID, userID discord.UserID) string {
 	return nickmap[userID]
 }
 
+// NickName returns the IRC name for userID in guildID.
+//
+// guildID must be a valid snowflake or the zero snowflake.
+// userID must be a valid snowflake.
+func (m *Map) NickName(guildID discord.GuildID, userID discord.UserID) string {
+	return m.nickName(guildID, userID)
+}
+
+func (m *Map) NickNameWithUserNameFallback(
+	guildID discord.GuildID, userID discord.UserID) (
+	beforeNick, currentNick string) {
+	beforeNick, currentNick =
+		m.updateNickFromUserIfNotPresent(guildID, userID)
+	return beforeNick, currentNick
+}
+
 // NickID returns the Discord ID for nick in guildID.
 //
 // guildID must be a valid snowflake or the zero snowflake.
 // nick must not be empty.
 func (m *Map) NickID(guildID discord.GuildID, nick string) discord.UserID {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	if !guildID.Valid() && guildID != 0 {
 		panic("NickID: invalid guildID")
 	}
@@ -121,9 +127,6 @@ func (m *Map) NickID(guildID discord.GuildID, nick string) discord.UserID {
 // channelID must be a valid snowflake.
 func (m *Map) ChannelName(guildID discord.GuildID,
 	channelID discord.ChannelID) string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	if !guildID.Valid() && guildID != 0 {
 		panic("ChannelName: invalid guildID")
 	}
@@ -146,8 +149,6 @@ func (m *Map) ChannelName(guildID discord.GuildID,
 // channelID must not be empty.
 func (m *Map) ChannelID(guildID discord.GuildID,
 	channel string) discord.ChannelID {
-	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	if !guildID.Valid() && guildID != 0 {
 		panic("ChannelID: invalid guildID")
@@ -165,18 +166,8 @@ func (m *Map) ChannelID(guildID discord.GuildID,
 	return chanmap[channel]
 }
 
-// UpdateUser updates the username entry for userID with ideal.
-// It returns the previous value and the current value as before and current
-// respectively.
-//
-// To remove an entry, pass an empty string as ideal.
-// If before is empty, userID was not in the map.
-// If current is empty, userID is no longer in the map.
-func (m *Map) UpdateUser(userID discord.UserID,
-	ideal string) (before string, current string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
+func (m *Map) updateUser(userID discord.UserID,
+	ideal string) (before, current string) {
 	currentName, ok := m.userf[userID]
 	if ok && demangle(currentName) == ideal {
 		return currentName, currentName
@@ -202,7 +193,20 @@ func (m *Map) UpdateUser(userID discord.UserID,
 	return currentName, newName
 }
 
-// UpdateNickLock updates the nickname entry for userID in nicksf and nicksb
+// UpdateUser updates the username entry for userID with ideal.
+// It returns the previous value and the current value as before and current
+// respectively.
+//
+// To remove an entry, pass an empty string as ideal.
+// If before is empty, userID was not in the map.
+// If current is empty, userID is no longer in the map.
+func (m *Map) UpdateUser(userID discord.UserID,
+	ideal string) (before, current string) {
+
+	return m.updateUser(userID, ideal)
+}
+
+// updateNickMaps updates the nickname entry for userID in nicksf and nicksb
 // with ideal. It returns the previous value and the current value as before
 // and current respectively.
 //
@@ -211,12 +215,13 @@ func (m *Map) UpdateUser(userID discord.UserID,
 // If current is empty, userID is no longer in the map.
 //
 // nicksf and nicksb must not be nil.
-// The caller must hold m.mu.
-func (m *Map) updateNickLock(
+func (m *Map) updateNickMaps(
 	nicksf map[discord.UserID]string, nicksb map[string]discord.UserID,
-	userID discord.UserID, ideal string) (before string, current string) {
-	currentName, ok := nicksf[userID]
-	if ok && demangle(currentName) == ideal {
+	userID discord.UserID, ideal string,
+	onlyIfNotPresent bool) (before, current string) {
+	currentName, present := nicksf[userID]
+	if (present && onlyIfNotPresent) ||
+		(present && demangle(currentName) == ideal) {
 		return currentName, currentName
 	}
 
@@ -233,15 +238,48 @@ func (m *Map) updateNickLock(
 	nicksf[userID] = newName
 	nicksb[newName] = userID
 
-	if ok {
+	if present {
 		delete(m.userb, currentName)
 	}
 
 	return currentName, newName
 }
 
-// UpdateChannelLock updates the channel name entry for channelID in chansf and
-// chansb with ideal. It returns the previous value and the current value as
+func (m *Map) updateNick(guildID discord.GuildID, userID discord.UserID,
+	ideal string, onlyIfNotPresent bool) (before, current string) {
+	if _, ok := m.nicksf[guildID]; !ok {
+		m.nicksf[guildID] = make(map[discord.UserID]string)
+	}
+
+	if _, ok := m.nicksb[guildID]; !ok {
+		m.nicksb[guildID] = make(map[string]discord.UserID)
+	}
+
+	return m.updateNickMaps(m.nicksf[guildID], m.nicksb[guildID],
+		userID, ideal, onlyIfNotPresent)
+}
+
+// UpdateNick updates the nickname entry for userID in guildID with ideal.
+// It returns the previous value and the current value as before and current
+// respectively.
+//
+// To remove an entry, pass an empty string as ideal.
+// If before is empty, userID was not in the map.
+// If current is empty, userID is no longer in the map.
+func (m *Map) UpdateNick(guildID discord.GuildID,
+	userID discord.UserID, ideal string) (before, current string) {
+
+	return m.updateNick(guildID, userID, ideal, false)
+}
+
+func (m *Map) updateNickFromUserIfNotPresent(guildID discord.GuildID,
+	userID discord.UserID) (before, current string) {
+	ideal := m.userName(userID)
+	return m.updateNick(guildID, userID, ideal, true)
+}
+
+// updateChannelMaps updates the channel name entry for channelID in chansf
+// and chansb with ideal. It returns the previous value and the current value as
 // before and current respectively.
 //
 // To remove an entry, pass an empty string as ideal.
@@ -249,11 +287,10 @@ func (m *Map) updateNickLock(
 // If current is empty, channelID is no longer in the map.
 //
 // chansf and chansb must not be nil.
-// The caller must hold m.mu.
-func (m *Map) updateChannelLock(chansf map[discord.ChannelID]string,
+func (m *Map) updateChannelMaps(chansf map[discord.ChannelID]string,
 	chansb map[string]discord.ChannelID,
 	channelID discord.ChannelID,
-	ideal string) (before string, current string) {
+	ideal string) (before, current string) {
 	currentName, ok := chansf[channelID]
 	if ok && demangle(currentName) == ideal {
 		return currentName, currentName
@@ -279,28 +316,19 @@ func (m *Map) updateChannelLock(chansf map[discord.ChannelID]string,
 	return currentName, newName
 }
 
-// UpdateNick updates the nickname entry for userID in guildID with ideal.
-// It returns the previous value and the current value as before and current
-// respectively.
-//
-// To remove an entry, pass an empty string as ideal.
-// If before is empty, userID was not in the map.
-// If current is empty, userID is no longer in the map.
-func (m *Map) UpdateNick(guildID discord.GuildID,
-	userID discord.UserID, ideal string) (before string, current string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if _, ok := m.nicksf[guildID]; !ok {
-		m.nicksf[guildID] = make(map[discord.UserID]string)
+func (m *Map) updateChannel(guildID discord.GuildID,
+	channelID discord.ChannelID,
+	ideal string) (before, current string) {
+	if _, ok := m.chansf[guildID]; !ok {
+		m.chansf[guildID] = make(map[discord.ChannelID]string)
 	}
 
-	if _, ok := m.nicksb[guildID]; !ok {
-		m.nicksb[guildID] = make(map[string]discord.UserID)
+	if _, ok := m.chansb[guildID]; !ok {
+		m.chansb[guildID] = make(map[string]discord.ChannelID)
 	}
 
-	return m.updateNickLock(
-		m.nicksf[guildID], m.nicksb[guildID], userID, ideal)
+	return m.updateChannelMaps(
+		m.chansf[guildID], m.chansb[guildID], channelID, ideal)
 }
 
 // UpdateChannel updates the channel name entry for channelID in guildID
@@ -312,20 +340,9 @@ func (m *Map) UpdateNick(guildID discord.GuildID,
 // If current is empty, channelID is no longer in the map.
 func (m *Map) UpdateChannel(guildID discord.GuildID,
 	channelID discord.ChannelID,
-	ideal string) (before string, current string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	ideal string) (before, current string) {
 
-	if _, ok := m.chansf[guildID]; !ok {
-		m.chansf[guildID] = make(map[discord.ChannelID]string)
-	}
-
-	if _, ok := m.chansb[guildID]; !ok {
-		m.chansb[guildID] = make(map[string]discord.ChannelID)
-	}
-
-	return m.updateChannelLock(
-		m.chansf[guildID], m.chansb[guildID], channelID, ideal)
+	return m.updateChannel(guildID, channelID, ideal)
 }
 
 // sanitize returns name with all instances of

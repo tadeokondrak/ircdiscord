@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -9,25 +10,32 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/pkg/errors"
 	"github.com/tadeokondrak/ircdiscord/internal/server"
 )
 
+// listen returns a net.Listener listening on port.
+//
+// If port is 0, the listening port will be 6667.
 func listen(port int) (net.Listener, error) {
 	if port == 0 {
 		port = 6667
 	}
+
 	addr := fmt.Sprintf(":%d", port)
 
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, errors.Wrap(err,
-			"failed to create listener")
+		return nil, fmt.Errorf("failed to create listener: %w", err)
 	}
 
 	return listener, nil
 }
 
+// listenTLS returns a net.Listener listening on port.
+//
+// If port is 0, the listening port will be 6667.
+// certfile and keyfile are paths to their respective files,
+// to listen using TLS.
 func listenTLS(port int, certfile, keyfile string) (net.Listener, error) {
 	if certfile == "" || keyfile == "" {
 		return nil, errors.New(
@@ -36,7 +44,7 @@ func listenTLS(port int, certfile, keyfile string) (net.Listener, error) {
 
 	cert, err := tls.LoadX509KeyPair(certfile, keyfile)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to load keypair")
+		return nil, fmt.Errorf("failed to load keypair: %w", err)
 	}
 
 	config := &tls.Config{Certificates: []tls.Certificate{cert}}
@@ -44,12 +52,12 @@ func listenTLS(port int, certfile, keyfile string) (net.Listener, error) {
 	if port == 0 {
 		port = 6697
 	}
+
 	addr := fmt.Sprintf(":%d", port)
 
 	listener, err := tls.Listen("tcp", addr, config)
 	if err != nil {
-		return nil, errors.Wrap(err,
-			"failed to create listener")
+		return nil, fmt.Errorf("failed to create listener: %w", err)
 	}
 
 	return listener, nil
@@ -79,22 +87,22 @@ func main() {
 	flag.StringVar(&keyfile, "key", "", "tls key file")
 	flag.Parse()
 
-	if !debug {
-		log.SetFlags(0)
-	} else {
+	if debug {
 		log.SetFlags(log.Lshortfile)
+	} else {
+		log.SetFlags(0)
 	}
 
 	var ln net.Listener
-	if !tlsEnabled {
+	if tlsEnabled {
 		var err error
-		ln, err = listen(port)
+		ln, err = listenTLS(port, certfile, keyfile)
 		if err != nil {
 			log.Fatalln(err)
 		}
 	} else {
 		var err error
-		ln, err = listenTLS(port, certfile, keyfile)
+		ln, err = listen(port)
 		if err != nil {
 			log.Fatalln(err)
 		}

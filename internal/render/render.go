@@ -10,12 +10,11 @@ import (
 	"github.com/diamondburned/ningen/md"
 	"github.com/sourcegraph/syntaxhighlight"
 	"github.com/tadeokondrak/ircdiscord/internal/color"
-	"github.com/tadeokondrak/ircdiscord/internal/session"
 	"github.com/yuin/goldmark/ast"
 )
 
-func Content(guildID discord.Snowflake, sess *session.Session, source []byte, m *discord.Message) string {
-	parsed := md.ParseWithMessage(source, sess.Store, m, false)
+func Content(guildID discord.GuildID, source []byte, m *discord.Message) string {
+	parsed := md.Parse(source)
 	var s strings.Builder
 	var walker func(n ast.Node, enter bool) (ast.WalkStatus, error)
 	walker = func(n ast.Node, enter bool) (ast.WalkStatus, error) {
@@ -112,11 +111,13 @@ func Content(guildID discord.Snowflake, sess *session.Session, source []byte, m 
 				case n.Channel != nil:
 					fmt.Fprintf(&s, "\x02\x0302#%s\x03\x02", n.Channel.Name)
 				case n.GuildUser != nil:
-					name, err := sess.UserName(guildID, n.GuildUser.User.ID)
-					if err != nil {
-						name = n.GuildUser.User.Username
-					}
-					fmt.Fprintf(&s, "\x02\x0302@%s\x03\x02", name)
+					/*
+						name, err := sess.UserName(guildID, n.GuildUser.User.ID)
+						if err != nil {
+							name = n.GuildUser.User.Username
+						}
+						fmt.Fprintf(&s, "\x02\x0302@%s\x03\x02", name)
+					*/
 				}
 			}
 		case *ast.String:
@@ -140,12 +141,12 @@ func Content(guildID discord.Snowflake, sess *session.Session, source []byte, m 
 	return s.String()
 }
 
-func Message(guildID discord.Snowflake, sess *session.Session, m *discord.Message) (string, error) {
+func Message(guildID discord.GuildID, m *discord.Message) (string, error) {
 	if m.Type != discord.DefaultMessage {
 		return "", nil
 	}
 	var s strings.Builder
-	s.WriteString(Content(guildID, sess, []byte(m.Content), m))
+	s.WriteString(Content(guildID, []byte(m.Content), m))
 	for _, e := range m.Embeds {
 		var es strings.Builder
 		if e.Title != "" {
@@ -157,7 +158,7 @@ func Message(guildID discord.Snowflake, sess *session.Session, m *discord.Messag
 		}
 
 		if e.Description != "" {
-			es.WriteString(Content(guildID, sess, []byte(e.Description), m))
+			es.WriteString(Content(guildID, []byte(e.Description), m))
 			es.WriteString("\n")
 		}
 
@@ -166,7 +167,7 @@ func Message(guildID discord.Snowflake, sess *session.Session, m *discord.Messag
 			if !f.Inline {
 				es.WriteString("\n")
 			}
-			es.WriteString(Content(guildID, sess, []byte(f.Value), m))
+			es.WriteString(Content(guildID, []byte(f.Value), m))
 			es.WriteString("\n")
 		}
 		embed := strings.Split(strings.Trim(es.String(), "\n"), "\n")

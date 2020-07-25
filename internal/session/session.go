@@ -1,8 +1,7 @@
 package session
 
 import (
-	"errors"
-	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"unicode"
@@ -10,26 +9,29 @@ import (
 	"sync/atomic"
 
 	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/handler"
+	"github.com/diamondburned/arikawa/gateway"
 	"github.com/diamondburned/arikawa/state"
+	"github.com/diamondburned/arikawa/utils/httputil/httpdriver"
 	"github.com/diamondburned/ningen"
-	"github.com/tadeokondrak/ircdiscord/internal/idmap"
+	"github.com/tadeokondrak/ircdiscord/internal/names"
 )
 
 // Session is the reference-counted shared state between all clients for a
 // Discord user.
 type Session struct {
-	*ningen.State
-	removeFunc       RemoveFunc
-	internalHandler  *handler.Handler
-	userMap          map[discord.Snowflake]string
-	userMapMutex     sync.RWMutex
-	nickMaps         map[discord.Snowflake]*idmap.IDMap
-	nickMapsMutex    sync.RWMutex
-	channelMaps      map[discord.Snowflake]*idmap.IDMap
-	channelMapsMutex sync.RWMutex
-	id               discord.Snowflake
-	refs             uint32
+	refs uint32
+
+	// read-only after construction
+	state      *ningen.State
+	removeFunc RemoveFunc
+	userID     discord.UserID
+	debug      bool
+
+	clientsMutex sync.Mutex
+	clients      map[chan<- interface{}]Guild
+	names        *names.Map
+
+	reqs chan interface{}
 }
 
 // RemoveFunc is a function type used to remove a Session from some storage
@@ -37,7 +39,8 @@ type Session struct {
 type RemoveFunc func(s *Session)
 
 // New creates a new Session.
-// removeFunc is a function that will called on Close.
+//
+// removeFunc will called on Close.
 func New(token string, debug bool, removeFunc RemoveFunc) (*Session, error) {
 	plain, err := state.New(token)
 	if err != nil {
@@ -49,224 +52,202 @@ func New(token string, debug bool, removeFunc RemoveFunc) (*Session, error) {
 		return nil, err
 	}
 
-	s := &Session{
-		State:           state,
-		removeFunc:      removeFunc,
-		internalHandler: handler.New(),
-		userMap:         make(map[discord.Snowflake]string),
-		nickMaps:        make(map[discord.Snowflake]*idmap.IDMap),
-		channelMaps:     make(map[discord.Snowflake]*idmap.IDMap),
-		refs:            0,
+	if debug {
+		state.AddHandler(func(e interface{}) {
+			log.Printf("<-d %T\n", e)
+		})
+
+		state.OnRequest = append(state.OnRequest,
+			func(r httpdriver.Request) error {
+				log.Printf("->d %s\n", r.GetPath())
+				return nil
+			},
+		)
 	}
 
-	state.AddHandler(s.onEventHarvest)
+	s := &Session{
+		refs:       1,
+		state:      state,
+		removeFunc: removeFunc,
+		debug:      debug,
+		clients:    make(map[chan<- interface{}]Guild),
+		names:      names.NewMap(),
+		reqs:       make(chan interface{}),
+	}
 
 	if err := state.Open(); err != nil {
 		return nil, err
 	}
 
-	me, err := state.Me()
-	if err != nil {
+	if err := s.handleReadyEvent(&s.state.Ready); err != nil {
 		return nil, err
 	}
 
-	s.id = me.ID
+	s.userID = s.state.Ready.User.ID
 
 	return s, nil
 }
 
 // Ref increments the reference count.
+//
+// This function can be called from multiple concurrent goroutines.
 func (s *Session) Ref() {
-	atomic.AddUint32(&s.refs, 1)
+	refs := atomic.AddUint32(&s.refs, 1)
+
+	if s.debug {
+		log.Printf("session %p: refs %d -> %d", s, refs-1, refs)
+	}
 }
 
 // Unref decrements the reference count, calling Close if it hits zero.
+//
+// This function can be called from multiple concurrent goroutines.
 func (s *Session) Unref() error {
-	if atomic.AddUint32(&s.refs, ^uint32(0)) == 0 {
+	refs := atomic.AddUint32(&s.refs, ^uint32(0))
+
+	if s.debug {
+		log.Printf("session %p: refs %d -> %d", s, refs+1, refs)
+	}
+
+	if refs == 0 {
 		return s.Close()
 	}
+
 	return nil
 }
 
 // Close calls the remove function given in New then closes the Discord
 // connection.
+//
+// This function can be called from multiple concurrent goroutines (once).
 func (s *Session) Close() error {
 	s.removeFunc(s)
-	return s.State.Close()
+	return s.state.Close()
 }
 
-// Run does nothing for now.
+// Run listens for Discord events and broadcasts them to all listeners.
 func (s *Session) Run() error {
-	return nil
-}
+	events := make(chan gateway.Event)
+	cancel := s.state.AddHandler(events)
+	defer cancel()
 
-// Messages overrides (*ningen.State).Messages.
-// It is a temporary hack to process the users and members in a message before
-// posting it, to avoid messages being sent before joins.
-func (s *Session) Messages(
-	channelID discord.Snowflake) ([]discord.Message, error) {
-	messages, err := s.State.Messages(channelID)
-	if err == nil {
-		s.harvestMessages(messages)
-	}
-	return messages, err
-}
-
-func safeGetMap(maps map[discord.Snowflake]*idmap.IDMap,
-	id discord.Snowflake, mu *sync.RWMutex) *idmap.IDMap {
-	mu.RLock()
-	m, ok := maps[id]
-	mu.RUnlock()
-	if ok {
-		return m
-	}
-
-	mu.Lock()
-	maps[id] = idmap.New()
-	mu.Unlock()
-	return maps[id]
-}
-
-func (s *Session) nickMap(guild discord.Snowflake) *idmap.IDMap {
-	return safeGetMap(s.nickMaps, guild, &s.nickMapsMutex)
-}
-
-func (s *Session) channelMap(guild discord.Snowflake) *idmap.IDMap {
-	return safeGetMap(s.channelMaps, guild, &s.channelMapsMutex)
-}
-
-func (s *Session) plainUsername(userID discord.Snowflake) (string, error) {
-	s.userMapMutex.RLock()
-	name, ok := s.userMap[userID]
-	s.userMapMutex.RUnlock()
-	if ok {
-		return name, nil
-	}
-
-	user, err := s.User(userID)
-	if err != nil {
-		return "", err
-	}
-	s.harvestUser(user)
-
-	return user.Username, nil
-}
-
-var ErrInvalidSnowflake = errors.New("invalid snowflake given")
-
-// UserName returns the IRC nickname for the given Discord user.
-func (s *Session) UserName(guild discord.Snowflake,
-	id discord.Snowflake) (string, error) {
-	if !id.Valid() {
-		return "", ErrInvalidSnowflake
-	}
-
-	nickMap := s.nickMap(guild)
-
-	if name := nickMap.Name(id); name != "" {
-		return name, nil
-	}
-
-	var name string
-	if guild.Valid() {
-		member, err := s.Store.Member(guild, id)
-		if err == state.ErrStoreNotFound {
-			var err error
-			name, err = s.plainUsername(id)
-			if err != nil {
-				return "", err
+	for {
+		select {
+		case ev := <-events:
+			if err := s.handleEvent(ev); err != nil {
+				return nil
 			}
-			s.MemberState.RequestMember(guild, id)
-			goto insert
-		} else if err != nil {
-			return "", err
-		}
-		if member.Nick != "" {
-			name = member.Nick
-		} else {
-			name = member.User.Username
-		}
-	} else {
-		var err error
-		name, err = s.plainUsername(id)
-		if err != nil {
-			return "", err
+		case req := <-s.reqs:
+			if err := s.handleRequest(req); err != nil {
+				return nil
+			}
 		}
 	}
+}
 
-insert:
-	pre, post := nickMap.Insert(id, sanitizeNick(name))
-	if pre != post {
-		ev := &UserNameChange{
-			GuildID: guild,
-			ID:      id,
-			Old:     pre,
-			New:     post,
-		}
-		s.internalHandler.Call(ev)
+func (s *Session) updateName(userID discord.UserID, username string) {
+	username = sanitizeIRCName(username)
+	before, current := s.names.UpdateUser(userID, username)
+	if before != current {
+		s.broadcastGuildFunc(func(guildID discord.GuildID) interface{} {
+			beforeNick, currentNick :=
+				s.names.NickNameWithUserNameFallback(guildID, userID)
+			return &UserUpdateEvent{
+				Before: User{
+					Nickname: beforeNick,
+					Username: before,
+					ID:       userID.String(),
+				},
+				Current: User{
+					Nickname: currentNick,
+					Username: current,
+					ID:       userID.String(),
+				},
+			}
+		})
 	}
-
-	return post, nil
 }
 
-// UserFromName returns the Discord user for the given IRC nickname.
-func (s *Session) UserFromName(guild discord.Snowflake,
-	name string) discord.Snowflake {
-	nickMap := s.nickMap(guild)
-	return nickMap.Snowflake(name)
-}
-
-// While IsInitial is true, the callback will only be called in one goroutine.
-// This function blocks until all events with IsInitial are sent.
-func (s *Session) SubscribeUserList(guild discord.Snowflake,
-	handler func(*UserNameChange)) (cancel func()) {
-	nickMap := s.nickMap(guild)
-	nickMap.Access(func(forward map[discord.Snowflake]string,
-		backward map[string]discord.Snowflake) {
-		var change UserNameChange
-		change.GuildID = guild
-		change.IsInitial = true
-		for id, name := range forward {
-			change.ID = id
-			change.New = name
-			handler(&change)
-		}
-		cancel = s.internalHandler.AddHandler(handler)
-	})
-	return
-}
-
-var ErrNoChannel = errors.New("no channel by that name exists")
-
-// ChannelFromName returns the Discord channel for a given IRC channel name.
-func (s *Session) ChannelFromName(guild discord.Snowflake,
-	name string) discord.Snowflake {
-	channelMap := s.channelMap(guild)
-	name = strings.TrimPrefix(name, "#")
-	return channelMap.Snowflake(name)
-}
-
-// ChannelName returns the IRC channel name for the given Discord channel ID.
-func (s *Session) ChannelName(guild discord.Snowflake,
-	id discord.Snowflake) (string, error) {
-	channelMap := s.channelMap(guild)
-
-	if name := channelMap.Name(id); name != "" {
-		return fmt.Sprintf("#%s", name), nil
+func (s *Session) updateNick(guildID discord.GuildID, userID discord.UserID,
+	nick string, username string) {
+	if nick == "" {
+		nick = username
 	}
-
-	channel, err := s.State.Channel(id)
-	if err != nil {
-		return "", err
+	nick = sanitizeIRCName(nick)
+	username = sanitizeIRCName(username)
+	beforeUser, currentUser := s.names.UpdateUser(userID, username)
+	beforeNick, currentNick := s.names.UpdateNick(guildID, userID, nick)
+	if beforeUser != currentUser || beforeNick != currentNick {
+		s.broadcastGuild(&UserUpdateEvent{
+			Before: User{
+				Nickname: beforeNick,
+				Username: beforeUser,
+				ID:       userID.String(),
+			},
+			Current: User{
+				Nickname: currentNick,
+				Username: currentUser,
+				ID:       userID.String(),
+			},
+		}, guildID)
 	}
-
-	// TODO: send event when pre != post
-	_, post := channelMap.Insert(channel.ID, channel.Name)
-	return fmt.Sprintf("#%s", post), nil
 }
 
-// sanitizeNick removes characters invalid in an IRC nickname from a string.
-func sanitizeNick(s string) string {
+func (s *Session) updateUserFromUser(user *discord.User) {
+	s.updateName(user.ID, user.Username)
+}
+
+func (s *Session) updateNickFromMember(guildID discord.GuildID,
+	member *discord.Member) {
+	s.updateNick(guildID, member.User.ID, member.Nick, member.User.Username)
+}
+
+func (s *Session) updateChannel(guildID discord.GuildID,
+	channel *discord.Channel) {
+	name := sanitizeIRCName(channel.Name)
+	before, current := s.names.UpdateChannel(guildID, channel.ID, name)
+	if before != current {
+		s.broadcastGuild(&ChannelUpdateEvent{
+			Before: Channel{
+				Name: before,
+				ID:   channel.ID.String(),
+			},
+			Current: Channel{
+				Name: before,
+				ID:   channel.ID.String(),
+			},
+		}, guildID)
+	}
+}
+func (s *Session) userName(userID discord.UserID) string {
+	return s.names.UserName(userID)
+}
+
+func (s *Session) nickName(guildID discord.GuildID,
+	userID discord.UserID) string {
+	if guildID == discord.GuildID(0) {
+		return s.names.UserName(userID)
+	}
+	currentUsername := s.names.UserName(userID)
+	before, current := s.names.NickNameWithUserNameFallback(guildID, userID)
+	if before != current {
+		s.broadcastGuild(&UserUpdateEvent{
+			Before: User{
+				Nickname: before,
+				Username: currentUsername,
+				ID:       userID.String(),
+			},
+			Current: User{
+				Nickname: current,
+				Username: currentUsername,
+				ID:       userID.String(),
+			},
+		}, guildID)
+	}
+	return current
+}
+
+func sanitizeIRCName(name string) string {
 	return strings.Map(func(r rune) rune {
 		if unicode.IsLetter(r) ||
 			unicode.IsNumber(r) {
@@ -277,5 +258,5 @@ func sanitizeNick(s string) string {
 			return r
 		}
 		return -1
-	}, s)
+	}, name)
 }

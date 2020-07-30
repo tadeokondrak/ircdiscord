@@ -149,7 +149,7 @@ func (c *Client) channelIsVisible(channel *discord.Channel) (bool, error) {
 		return false, err
 	}
 
-	if channel.Type != discord.GuildText {
+	if channel.Type != discord.GuildText && channel.Type != discord.GuildNews {
 		return false, nil
 	}
 
@@ -169,7 +169,7 @@ func (c *Client) seedState() error {
 		}
 
 		for _, channel := range channels {
-			if channel.Type != discord.GuildText {
+			if channel.Type != discord.GuildText && channel.Type != discord.GuildNews {
 				continue
 			}
 			_, err := c.session.ChannelName(c.guild, channel.ID)
